@@ -1,95 +1,24 @@
 import argparse
+import base64
+import io
+import json
+import multiprocessing
+import os
+from pathlib import Path
 from re import L
+import subprocess
 import time
 import traceback
-from typing import Iterable, Optional, Sequence, Union, cast
+from typing import Any, Iterable, Optional, Sequence, Union, cast
+import zlib
 import cv2
 from cv2 import CAP_PROP_FRAME_HEIGHT
 from cv2 import VideoCapture
 from cv2 import CAP_PROP_POS_FRAMES
 from cv2 import Mat
-from isort import file
 import numpy as np
-
-
-class BoundingBoxWithContour():
-    def __init__(self, box: tuple[float, float, float, float], contour: np.ndarray) -> None:
-        self.bounding_box = box
-        self.contour = contour
-
-
-class FrameInfo():
-    def __init__(self, frame: Mat, frame_number: int, regions: list[BoundingBoxWithContour]) -> None:
-        self.frame = frame
-        self.frame_number = frame_number
-        self.regions = regions
-
-
-class Clip():
-    def __init__(self, fps: float, output_size: tuple[int, int]) -> None:
-        self.frames: list[FrameInfo] = []
-        self.fps = fps
-        self.output_size = output_size
-
-    def append(self, frame_info: FrameInfo) -> None:
-        self.frames.append(frame_info)
-
-    def write(self, path: str):
-        fourcc = cv2.VideoWriter.fourcc(*'XVID')
-        out = cv2.VideoWriter(path, fourcc, self.fps, self.output_size)
-        for f in self.frames:
-            out.write(f.frame)
-
-        out.release()
-
-
-class ClipManager():
-    def __init__(self, output_size: tuple[int, int], fps: float, clip_duration) -> None:
-        self._match_started = False
-        self.current_clip: Optional[Clip]
-        self.fps: float = fps
-        self.output_size = output_size
-        self._clip_duration = clip_duration
-        self._clip_count = 0
-
-    def try_start(self):
-        if self._match_started:
-            return False
-        self._match_started = True
-        self.current_clip = Clip(self.fps, self.output_size)
-        self._clip_count = self.fps * self._clip_duration
-
-        return True
-
-    def try_add_frame(self, frame: Mat, regions: list[tuple[tuple[float, float, float, float], np.ndarray]]):
-        if not self._match_started or self.current_clip is None:
-            return False
-
-        self.current_clip.append(FrameInfo(frame, len(
-            self.current_clip.frames), [BoundingBoxWithContour(b, c) for (b, c) in regions]))
-
-        return True
-
-    def should_complete(self):
-        if not self._match_started or self.current_clip is None:
-            return
-
-        return self._clip_count == len(self.current_clip.frames)
-
-    def complete(self):
-        (success, clip) = self.try_complete()
-        assert (clip is not None)
-        return clip
-
-    def try_complete(self):
-        if not self._match_started:
-            return (False, None)
-
-        self._clip_count = 0
-        self._match_started = False
-        clip = self.current_clip
-        self.current_clip = None
-        return (True, cast(Clip, clip))
+import compressor
+import clip_manager
 
 
 def display(window_name, frame, show_frame=True):
@@ -156,7 +85,7 @@ def fill_and_smooth_internal_holes(frame, show_frame=True):
 
 def process(initial_frame, frame, show_frame=True):
     background_subtracted_frame = background_subtraction(
-        initial_frame, frame, show_frame)
+        initial_frame, frame, show_frame=True)
     masked = apply_mask(background_subtracted_frame, show_frame)
     normalized = normalize_frame(masked, show_frame)
     binary_thresholded_frame = apply_thresholding(normalized, show_frame)
@@ -188,9 +117,12 @@ def is_key(input, key):
     return input & 0xFF == ord(key)
 
 
-def capture(capture: VideoCapture):  # type: ignore
+RUN_AT_FRAMERATE = False
+
+
+def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignore
     MIN_RELATIVE_CONTOUR_AREA = 0.5 / 100
-    CLIP_DURATION = 20
+    MIN_FRAME_RESET_CONTOUR_AREA = 0.1 / 100
 
     def is_valid_contour(contour, bounding_rect, capture_area):
         (x, y, w, h) = bounding_rect
@@ -207,107 +139,135 @@ def capture(capture: VideoCapture):  # type: ignore
 
     output_size = get_output_size(video)
     fps = get_predicted_fps(video)
-    capture_area = output_size[0] * output_size[1]
+
+    width, height = output_size
+    max_width = 640
+    aspect = width/height
+    max_height = max_width//aspect
+    processing_size = (int(max_width), int(max_height))
+
+    capture_area = processing_size[0] * processing_size[1]
+    queue.put((processing_size, fps))
+
+    # fourcc = cv2.VideoWriter.fourcc(*'XVID')
+    # out = cv2.VideoWriter(str("resized.avi"), fourcc, 25, processing_size)
+    # out2 = cv2.VideoWriter(str("full.avi"), fourcc, 25, output_size)
 
     try:
-        initial_frame = None
-        frames = []
-        current_frame = 0
-        clips = ClipManager(output_size, fps, CLIP_DURATION)
+        reference_frame = None
+        frame_count = 0
+        frames_since_last_reset = 0
         fps_ms = int(1000//fps)
         while True:
             frame_start = time.time()
-            frame_orig: Mat
-            success, frame_orig = capture.read()
-            frames.append(frame_orig)
-            current_frame += 1
-            adjusted_offset = max(int(current_frame), 0)
-            adjusted_offset = min(len(frames) - 1, adjusted_offset)
-            frame_orig = frames[adjusted_offset]
-            if success == True:
-                # show the original video frame
-                display("original", frame_orig, False)
+            current_frame: Mat
+            read_frame, raw_frame = capture.read()
+            if read_frame == True:
 
-                width, height, _ = frame_orig.shape
+                # out2.write(raw_frame)
+
+                current_frame = cv2.resize(
+                    raw_frame.copy(), (processing_size[0], processing_size[1]))
+                # out.write(current_frame)
+                frame_count += 1
+
+                # show the original video frame
+                display("original", current_frame, False)
+
                 roi_x = 0
                 roi_y = 0
-                region_of_interest = frame_orig[roi_y:, roi_x:]
+                region_of_interest = current_frame[roi_y:, roi_x:]
 
                 # preprocess frame
                 preprocessed_frame = preprocess(region_of_interest, False)
-                if initial_frame is None:
-                    initial_frame = preprocessed_frame
+                if reference_frame is None:
+                    # reference_frame = current_frame
+                    reference_frame = preprocessed_frame
 
                 processed_frame = process(
-                    initial_frame, preprocessed_frame, False)
+                    reference_frame, preprocessed_frame, False)
+
+                # # https://docs.opencv.org/3.4/d4/dee/tutorial_optical_flow.html
+                # hsv = np.zeros_like(current_frame)
+                # flow = cv2.optflow.calcOpticalFlowDenseRLOF(
+                #     reference_frame, current_frame, None)
+                # hsv[..., 1] = 255
+                # mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+                # hsv[..., 0] = ang*180/np.pi/2
+                # hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
+                # processed_frame = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+                # display("Optical flow", processed_frame)
+                # processed_frame = cv2.cvtColor(hsv, cv2.COLOR_BGR2GRAY)
+                # end
+
                 (contours, _) = cv2.findContours(processed_frame,
                                                  cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                 matched_contours = []
-                draw_frame = frame_orig
+                has_large_contours = False
                 for contour in contours:
                     bounding_rect = cv2.boundingRect(contour)
                     area = cv2.contourArea(contour)
                     if not is_valid_contour(contour, bounding_rect, capture_area):
                         continue
 
+                    has_large_contours = True
+
                     (x, y, w, h) = cast(
                         tuple[int, int, int, int], bounding_rect)
 
                     relative_area = (area / capture_area) * 100
-                    matched_contours.append(
-                        ((x, y, w, h), contour))
 
-                    if draw_frame is None:
-                        draw_frame = frame_orig[:, :]
-
-                    cv2.putText(draw_frame, f"S: {relative_area:.6}", (x - 20, y - 20),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.1, (255, 255, 255), 4, 2)
                     # re-adjust the coordinates so they appear in the correct
                     # place on the original frame
                     adjusted_y = y + roi_y
                     adjusted_x = x + roi_x
-                    cv2.rectangle(draw_frame, (adjusted_x, adjusted_y),  # type: ignore
-                                  (adjusted_x + w, adjusted_y + h), (0, 255, 0), 1)
 
+                    matched_contours.append(
+                        ((adjusted_x, adjusted_y, w, h), contour, relative_area))
+
+                if has_large_contours:
+                    frames_since_last_reset = 0
+                else:
+                    if frames_since_last_reset >= 600:
+                        frames_since_last_reset = 0
+                        reference_frame = current_frame
+                        print("Updated reference frame")
+                    else:
+                        frames_since_last_reset += 1
+
+                contours = []
                 if len(matched_contours) != 0:
-                    clips.try_start()
-                    clips.try_add_frame(frame_orig, matched_contours)
-                    if clips.should_complete():
-                        clip = clips.complete()
-                        if clip is None:
-                            raise Exception("Expected to recieve a clip")
-                        clip.write(f"{current_frame}.avi")
+                    contours = [(box, contour)
+                                for (box, contour, _) in matched_contours]
 
-                display("contours", draw_frame)
+                queue.put((current_frame.copy(), contours))
+
+                for (box, contour, area) in matched_contours:
+                    (x, y, w, h) = box
+                    cv2.putText(current_frame, f"S: {area:.6}", (x - 20, y - 20),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.1, (255, 255, 255), 4, 2)
+                    cv2.rectangle(current_frame, (x, y),  # type: ignore
+                                  (x + w, y + h), (0, 255, 0), 1)
+
+                display(
+                    "contours", current_frame)
 
                 frame_end = time.time()
                 duration = int((frame_end - frame_start) * 1000)
                 wait = fps_ms - duration
                 key = None
-                if wait > 0:
+                if wait > 0 and RUN_AT_FRAMERATE:
                     key = cv2.waitKey(wait)
                 else:
                     key = cv2.waitKey(1)
                 if is_key(key, "q"):
                     # exit the application
                     break
-                # Step forward and backward through frames, from the first frame up to the latest played frame.
-                if is_key(key, "b"):
-                    current_frame = max(current_frame - fps, 0)
-                if is_key(key, "f"):
-                    current_frame = min(current_frame + fps, len(frames) - 1)
-
-                if (len(frames) > 2000):
-                    frames.pop(0)
-            else:
-                (success, clip) = clips.try_complete()
-                if clip is not None:
-                    clip.write(f"{current_frame}_clip.avi")
-                break
     except Exception:
         print(traceback.format_exc())
 
-    video.release()
+    queue.put(True)
+    capture.release()
     cv2.destroyAllWindows()
 
 
@@ -342,6 +302,6 @@ if __name__ == "__main__":
         print("Could not open video device or file.")
         exit(1)
 
-    capture(video)
-else:
-    print(f"{__name__} Expected to be run as a module, and not imported into a script file")
+    queue = multiprocessing.Queue()
+    # clip_manager.start_processing(queue)
+    capture(video, queue)
