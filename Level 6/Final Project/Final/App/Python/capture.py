@@ -85,7 +85,7 @@ def fill_and_smooth_internal_holes(frame, show_frame=True):
 
 def process(initial_frame, frame, show_frame=True):
     background_subtracted_frame = background_subtraction(
-        initial_frame, frame, show_frame=True)
+        initial_frame, frame, show_frame=False)
     masked = apply_mask(background_subtracted_frame, show_frame)
     normalized = normalize_frame(masked, show_frame)
     binary_thresholded_frame = apply_thresholding(normalized, show_frame)
@@ -121,7 +121,7 @@ RUN_AT_FRAMERATE = False
 
 
 def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignore
-    MIN_RELATIVE_CONTOUR_AREA = 0.5 / 100
+    MIN_RELATIVE_CONTOUR_AREA = 1.0 / 100
     MIN_FRAME_RESET_CONTOUR_AREA = 0.1 / 100
 
     def is_valid_contour(contour, bounding_rect, capture_area):
@@ -263,9 +263,12 @@ def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignor
                 if is_key(key, "q"):
                     # exit the application
                     break
+            else:
+                break
     except Exception:
         print(traceback.format_exc())
 
+    print("ending subprocesses")
     queue.put(True)
     capture.release()
     cv2.destroyAllWindows()
@@ -303,5 +306,5 @@ if __name__ == "__main__":
         exit(1)
 
     queue = multiprocessing.Queue()
-    # clip_manager.start_processing(queue)
+    clip_manager.start_processing(queue, Path("./clips"))
     capture(video, queue)

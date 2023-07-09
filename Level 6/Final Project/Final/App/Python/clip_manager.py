@@ -63,7 +63,7 @@ class Clip():
     def _onComplete(self, path: Path, output_path: Path):
         print(f"Saved to {output_path}")
         print(f"Removing original {path}")
-        # os.remove(path)
+        os.remove(path)
 
         print(f"json output")
         with open(output_path.with_suffix(".json"), "w") as f:
@@ -135,7 +135,8 @@ class ClipManager():
         return (True, cast(Clip, clip))
 
     @staticmethod
-    def start(queue: multiprocessing.Queue):
+    def start(queue: multiprocessing.Queue, output_dir: os.PathLike):
+        output_dir = Path(output_dir)
         CLIP_DURATION = 10
         processed_first_message = False
         frame_count = 0
@@ -156,7 +157,6 @@ class ClipManager():
                         processed_first_message = True
                         output_size, fps = cast(
                             tuple[tuple[int, int], int], data)
-                        capture_area = output_size[0] * output_size[1]
                         clips = ClipManager(output_size, fps, CLIP_DURATION)
                     else:
                         data = cast(tuple[Mat, RegionsList], data)
@@ -171,19 +171,27 @@ class ClipManager():
                                 if clip is None:
                                     raise Exception(
                                         "Expected to recieve a clip")
-                                clip.write(f"{frame_count}.avi")
+                                clip.write(output_dir.joinpath(
+                                    f"{frame_count}.avi"))
                 except Exception:
                     (_, clip) = clips.try_complete()
                     if clip is not None:
-                        clip.write(f"{frame_count}_clip.avi")
+                        clip.write(output_dir.joinpath(
+                            f"{frame_count}_clip.avi"))
                     print(traceback.format_exc())
         except Exception:
             print(traceback.format_exc())
 
 
-def start_processing(process_queue: multiprocessing.Queue):
+def start_processing(process_queue: multiprocessing.Queue, output_dir: Path):
+    if not output_dir.is_dir():
+        raise Exception("Expected output_dir to be a directory")
+
+    if not output_dir.exists():
+        os.mkdir(output_dir)
+
     p = multiprocessing.Process(
-        target=ClipManager.start, args=(process_queue,))
+        target=ClipManager.start, args=(process_queue, output_dir))
     p.start()
 
 
