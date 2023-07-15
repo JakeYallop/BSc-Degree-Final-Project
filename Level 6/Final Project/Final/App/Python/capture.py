@@ -1,97 +1,22 @@
 import argparse
-import base64
-import io
-import json
 import multiprocessing
-import os
 from pathlib import Path
-from re import L
-import subprocess
 import time
 import traceback
-from typing import Any, Iterable, Optional, Sequence, Union, cast
-import zlib
+from typing import cast
+from bs_morphology_solver import morphology_solver
 import cv2
 from cv2 import CAP_PROP_FRAME_HEIGHT
 from cv2 import VideoCapture
 from cv2 import CAP_PROP_POS_FRAMES
 from cv2 import Mat
 import numpy as np
-import compressor
 import clip_manager
 
 
 def display(window_name, frame, show_frame=True):
     if (show_frame):
         cv2.imshow(window_name, frame)
-
-
-def convert_to_greyscale(frame, show_frame=True):
-    frame_processed = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    display("greyscale", frame_processed, show_frame)
-    return frame_processed
-
-
-def blur_frame_gaussian(frame, show_frame=True):
-    kernel_size = (25, 25)
-    processed = cv2.GaussianBlur(frame, kernel_size, 0)
-    display("gaussian_blur", processed, show_frame)
-    return processed
-
-
-def preprocess(frame, show_frame=True):
-    greyscale = convert_to_greyscale(frame, show_frame)
-    blurred = blur_frame_gaussian(greyscale, show_frame)
-    return blurred
-
-
-def background_subtraction(initial_frame, frame, show_frame=True):
-    processed = cv2.absdiff(initial_frame, frame)
-    display("background subtraction", processed, show_frame)
-    return processed
-
-
-mask_thresh = 5
-
-
-def apply_mask(frame, show_frame=True):
-    mask = cv2.inRange(frame, np.asarray([mask_thresh]), np.asarray([255]))
-    masked_frame = cv2.bitwise_and(frame, frame.copy(), mask=mask)
-    display("Masked", frame, show_frame)
-    return masked_frame
-
-
-def normalize_frame(frame, show_frame=True):
-    normalized = cv2.normalize(frame, np.zeros(
-        frame.shape), 0, 255, cv2.NORM_MINMAX)  # type: ignore
-    display("Normalized", normalized, show_frame)
-    return normalized
-
-
-min_thresh = 40
-
-
-def apply_thresholding(frame, show_frame=True):
-    thresh_frame = cv2.threshold(frame, min_thresh, 255, cv2.THRESH_BINARY)[1]
-    return thresh_frame
-
-
-def fill_and_smooth_internal_holes(frame, show_frame=True):
-    kernel = np.ones((7, 7), np.uint8)
-    morph_frame = cv2.morphologyEx(frame, cv2.MORPH_CLOSE, kernel)
-    display("Morph", morph_frame, show_frame)
-    return morph_frame
-
-
-def process(initial_frame, frame, show_frame=True):
-    background_subtracted_frame = background_subtraction(
-        initial_frame, frame, show_frame=False)
-    masked = apply_mask(background_subtracted_frame, show_frame)
-    normalized = normalize_frame(masked, show_frame)
-    binary_thresholded_frame = apply_thresholding(normalized, show_frame)
-    smoothed = fill_and_smooth_internal_holes(
-        binary_thresholded_frame, show_frame)
-    return smoothed
 
 
 def get_output_size(capture: VideoCapture):  # type: ignore
@@ -118,6 +43,7 @@ def is_key(input, key):
 
 
 RUN_AT_FRAMERATE = False
+solver = morphology_solver()
 
 
 def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignore
@@ -141,7 +67,7 @@ def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignor
     fps = get_predicted_fps(video)
 
     width, height = output_size
-    max_width = 640
+    max_width = min(1280, width)
     aspect = width/height
     max_height = max_width//aspect
     processing_size = (int(max_width), int(max_height))
@@ -149,12 +75,7 @@ def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignor
     capture_area = processing_size[0] * processing_size[1]
     queue.put((processing_size, fps))
 
-    # fourcc = cv2.VideoWriter.fourcc(*'XVID')
-    # out = cv2.VideoWriter(str("resized.avi"), fourcc, 25, processing_size)
-    # out2 = cv2.VideoWriter(str("full.avi"), fourcc, 25, output_size)
-
     try:
-        reference_frame = None
         frame_count = 0
         frames_since_last_reset = 0
         fps_ms = int(1000//fps)
@@ -163,12 +84,8 @@ def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignor
             current_frame: Mat
             read_frame, raw_frame = capture.read()
             if read_frame == True:
-
-                # out2.write(raw_frame)
-
                 current_frame = cv2.resize(
                     raw_frame.copy(), (processing_size[0], processing_size[1]))
-                # out.write(current_frame)
                 frame_count += 1
 
                 # show the original video frame
@@ -178,30 +95,7 @@ def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignor
                 roi_y = 0
                 region_of_interest = current_frame[roi_y:, roi_x:]
 
-                # preprocess frame
-                preprocessed_frame = preprocess(region_of_interest, False)
-                if reference_frame is None:
-                    # reference_frame = current_frame
-                    reference_frame = preprocessed_frame
-
-                processed_frame = process(
-                    reference_frame, preprocessed_frame, False)
-
-                # # https://docs.opencv.org/3.4/d4/dee/tutorial_optical_flow.html
-                # hsv = np.zeros_like(current_frame)
-                # flow = cv2.optflow.calcOpticalFlowDenseRLOF(
-                #     reference_frame, current_frame, None)
-                # hsv[..., 1] = 255
-                # mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-                # hsv[..., 0] = ang*180/np.pi/2
-                # hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
-                # processed_frame = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-                # display("Optical flow", processed_frame)
-                # processed_frame = cv2.cvtColor(hsv, cv2.COLOR_BGR2GRAY)
-                # end
-
-                (contours, _) = cv2.findContours(processed_frame,
-                                                 cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                (contours, _) = solver.solve(region_of_interest, debug=True)
                 matched_contours = []
                 has_large_contours = False
                 for contour in contours:
@@ -230,8 +124,8 @@ def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignor
                 else:
                     if frames_since_last_reset >= 600:
                         frames_since_last_reset = 0
-                        reference_frame = current_frame
-                        print("Updated reference frame")
+                        # reference_frame = current_frame
+                        # print("Updated reference frame")
                     else:
                         frames_since_last_reset += 1
 
@@ -263,6 +157,10 @@ def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignor
                 if is_key(key, "q"):
                     # exit the application
                     break
+                elif is_key(key, "p"):
+                    cv2.waitKey(-1)
+                elif frame_count == 820:
+                    cv2.waitKey(-1)
             else:
                 break
     except Exception:
@@ -294,7 +192,7 @@ if __name__ == "__main__":
 
     deviceOrPath = ""
     if filepath is not None:
-        deviceOrPath = filepath
+        deviceOrPath = str(Path(filepath).resolve())
     if device is not None:
         deviceOrPath = device
 
