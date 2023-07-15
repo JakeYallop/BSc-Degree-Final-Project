@@ -1,20 +1,10 @@
-import argparse
-import base64
-import io
 import json
 import multiprocessing
 import os
 from pathlib import Path
-from re import L
-import subprocess
-import time
 import traceback
-from typing import Any, Iterable, Optional, Sequence, Union, cast
-import zlib
+from typing import Optional, Union, cast
 import cv2
-from cv2 import CAP_PROP_FRAME_HEIGHT
-from cv2 import VideoCapture
-from cv2 import CAP_PROP_POS_FRAMES
 from cv2 import Mat
 import numpy as np
 import compressor
@@ -62,8 +52,8 @@ class Clip():
 
     def _onComplete(self, path: Path, output_path: Path):
         print(f"Saved to {output_path}")
-        # print(f"Removing original {path}")
-        # os.remove(path)
+        print(f"Removing original {path}")
+        os.remove(path)
 
         print(f"json output")
         with open(output_path.with_suffix(".json"), "w") as f:

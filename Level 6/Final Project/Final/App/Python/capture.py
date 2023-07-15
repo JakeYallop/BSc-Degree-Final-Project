@@ -10,7 +10,6 @@ from cv2 import CAP_PROP_FRAME_HEIGHT
 from cv2 import VideoCapture
 from cv2 import CAP_PROP_POS_FRAMES
 from cv2 import Mat
-import numpy as np
 import clip_manager
 
 
@@ -158,8 +157,8 @@ def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignor
                     break
                 elif is_key(key, "p"):
                     cv2.waitKey(-1)
-                elif frame_count == 820:
-                    cv2.waitKey(-1)
+                # elif frame_count == 820:
+                #     cv2.waitKey(-1)
             else:
                 break
     except Exception:
