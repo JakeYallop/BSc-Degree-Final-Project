@@ -62,8 +62,8 @@ class Clip():
 
     def _onComplete(self, path: Path, output_path: Path):
         print(f"Saved to {output_path}")
-        print(f"Removing original {path}")
-        os.remove(path)
+        # print(f"Removing original {path}")
+        # os.remove(path)
 
         print(f"json output")
         with open(output_path.with_suffix(".json"), "w") as f:
@@ -151,6 +151,10 @@ class ClipManager():
                                                                    RegionsList], bool] = queue.get(block=True, timeout=3)
 
                     if isinstance(data, bool):
+                        (_, clip) = clips.try_complete()
+                        if clip is not None:
+                            clip.write(output_dir.joinpath(
+                                f"{frame_count}_clip.avi"))
                         break
 
                     if not processed_first_message:

@@ -42,7 +42,7 @@ def is_key(input, key):
     return input & 0xFF == ord(key)
 
 
-RUN_AT_FRAMERATE = False
+RUN_AT_FRAMERATE = True
 solver = morphology_solver()
 
 
@@ -53,15 +53,12 @@ def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignor
     def is_valid_contour(contour, bounding_rect, capture_area):
         (x, y, w, h) = bounding_rect
         area = cv2.contourArea(contour)
-        relative_area = (area / capture_area)
+        # relative_area = (area / capture_area)
+        relative_area = (w * h) / capture_area
         if relative_area < MIN_RELATIVE_CONTOUR_AREA:
             return False
         return True
         # aspect = w / h
-        # # cars are longer than they are tall
-        # # we can use the aspect ratio to check if we are tracking a person or a vehicle
-        # # When the vehicle turns up the junction, the bounding rect for contour is much taller than it is longer
-        # return (aspect > 1.2 and aspect < 3) or (aspect < 1 and aspect > 0.4)
 
     output_size = get_output_size(video)
     fps = get_predicted_fps(video)
@@ -89,7 +86,7 @@ def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignor
                 frame_count += 1
 
                 # show the original video frame
-                display("original", current_frame, False)
+                display("original", current_frame, True)
 
                 roi_x = 0
                 roi_y = 0
@@ -140,8 +137,10 @@ def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignor
                     (x, y, w, h) = box
                     cv2.putText(current_frame, f"S: {area:.6}", (x - 20, y - 20),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.1, (255, 255, 255), 4, 2)
-                    cv2.rectangle(current_frame, (x, y),  # type: ignore
+                    cv2.rectangle(current_frame, (x, y),
                                   (x + w, y + h), (0, 255, 0), 1)
+                    # cv2.polylines(current_frame, contour,
+                    #               True, (0, 0, 255), 2)
 
                 display(
                     "contours", current_frame)

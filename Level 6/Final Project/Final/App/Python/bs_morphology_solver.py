@@ -5,10 +5,11 @@ import numpy as np
 
 
 class morphology_solver():
-    def __init__(self, mask_thresh=20, threshold=70) -> None:
+    def __init__(self, low_mask_thresh=10, threshold=70) -> None:
         self.reference_frame: Optional[Mat] = None
-        self.mask_thresh = mask_thresh
+        self.mask_thresh = low_mask_thresh
         self.min_thresh = threshold
+        self._unprocessed_ref_frame = self.reference_frame
 
     def _display(self, window_name: str, frame, debug=True):
         if debug:
@@ -42,20 +43,18 @@ class morphology_solver():
         self._display("background subtraction", processed, debug)
         return processed
 
-    def _apply_mask(self, frame, debug=True):
+    def _apply_mask_low(self, frame, debug=True):
         mask = cv2.inRange(frame, np.asarray(
             [self.mask_thresh]), np.asarray([255]))
         masked_frame = cv2.bitwise_and(frame, frame.copy(), mask=mask)
-        self._display("Masked", frame, debug)
+        self._display("Masked", masked_frame, debug)
         return masked_frame
 
     def _normalize_frame(self, frame, debug=True):
         normalized = cv2.normalize(frame, np.zeros(
-            frame.shape), 0, 255, cv2.NORM_MINMAX)  # type: ignore
+            frame.shape), 0, 255, cv2.NORM_MINMAX)
         self._display("Normalized", normalized, debug)
         return normalized
-
-    min_thresh = 40
 
     def _apply_thresholding(self, frame, debug=True):
         thresh_frame = cv2.threshold(
@@ -67,7 +66,7 @@ class morphology_solver():
         morph_frame = frame
         kernel = np.ones((7, 7), np.uint8)
         morph_frame = cv2.morphologyEx(
-            morph_frame, cv2.MORPH_CLOSE, kernel, iterations=3)
+            morph_frame, cv2.MORPH_CLOSE, kernel, iterations=2)
 
         # morph_frame = cv2.morphologyEx(
         #     morph_frame, cv2.MORPH_ERODE, kernel, iterations=10)
@@ -76,8 +75,8 @@ class morphology_solver():
 
     def _process(self, reference_frame, frame, debug=True):
         background_subtracted_frame = self._background_subtraction(
-            reference_frame, frame, debug=False)
-        masked = self._apply_mask(background_subtracted_frame, debug)
+            reference_frame, frame, debug)
+        masked = self._apply_mask_low(background_subtracted_frame, debug)
         normalized = self._normalize_frame(masked, debug)
         binary_thresholded_frame = self._apply_thresholding(normalized, debug)
         smoothed = self._fill_and_smooth_internal_holes(
@@ -88,8 +87,10 @@ class morphology_solver():
         preprocessed = self._preprocess(current_frame, debug=True)
 
         if self.reference_frame is None:
+            self._unprocessed_ref_frame = current_frame
             self.reference_frame = preprocessed
 
+        self._display("Reference frame", self._unprocessed_ref_frame, debug)
         foreground = self._process(self.reference_frame, preprocessed, debug)
         self._display("Final Foregound", foreground)
         return cv2.findContours(foreground,
