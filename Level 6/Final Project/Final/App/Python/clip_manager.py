@@ -1,12 +1,16 @@
+import base64
+import datetime
 import json
 import multiprocessing
 import os
 from pathlib import Path
 import traceback
 from typing import Optional, Union, cast
+from urllib.parse import urljoin
 import cv2
 from cv2 import Mat
 import numpy as np
+import requests
 import compressor
 
 
@@ -23,11 +27,45 @@ class FrameInfo():
         self.regions = regions
 
 
+class ClipsApi():
+    def __init__(self) -> None:
+        url = os.environ["API_BASE_URL"]
+        self.host = url
+        self.session = requests.Session()
+        self.session.verify = False
+        pass
+
+    def add_clip(self, dateRecorded: datetime.datetime, clip_path: Path, detections: list[FrameInfo]):
+        with open(clip_path, "rb") as cf:
+
+            detection_data = []
+            for _, d in enumerate(detections):
+                for _, r in enumerate(d.regions):
+                    detection_data.append(
+                        {"timestamp": d.frame_number, "boundingBox": r.bounding_box})
+
+            data = cf.read()
+            url = self.make_url("/clips")
+            print(f"saving clip to API. Sending POST request to {url}")
+            r = self.session.post(url, json={
+                "dateRecorded": dateRecorded.isoformat(),
+                "data": base64.b64encode(data).decode(),
+                # TODO: store and post timestamp in frameInfo
+                "detections": detection_data
+            })
+
+            r.raise_for_status()
+
+    def make_url(self, path):
+        return urljoin(self.host, path)
+
+
 class Clip():
-    def __init__(self, fps: float, output_size: tuple[int, int]) -> None:
+    def __init__(self, api: ClipsApi, fps: float, output_size: tuple[int, int]) -> None:
         self.frames: list[FrameInfo] = []
         self.fps = fps
         self.output_size = output_size
+        self.api = api
 
     def append(self, frame_info: FrameInfo) -> None:
         self.frames.append(frame_info)
@@ -52,13 +90,15 @@ class Clip():
 
     def _onComplete(self, path: Path, output_path: Path):
         print(f"Saved to {output_path}")
+        # TODO: Record recorded date
+        self.api.add_clip(datetime.datetime.utcnow(), output_path, self.frames)
+
         print(f"Removing original {path}")
         os.remove(path)
 
         print(f"json output")
         with open(output_path.with_suffix(".json"), "w") as f:
             json.dump(self.frames, f, default=serializer, indent=2)
-
         print("done write")
 
 
@@ -77,19 +117,20 @@ RegionsList = list[tuple[tuple[float, float, float, float], np.ndarray]]
 
 
 class ClipManager():
-    def __init__(self, output_size: tuple[int, int], fps: float, clip_duration) -> None:
+    def __init__(self, clipsApi: ClipsApi, output_size: tuple[int, int], fps: float, clip_duration) -> None:
         self._match_started = False
         self.current_clip: Optional[Clip]
         self.fps: float = fps
         self.output_size = output_size
         self._clip_duration = clip_duration
         self._clip_count = 0
+        self.api = clipsApi
 
     def try_start(self):
         if self._match_started:
             return False
         self._match_started = True
-        self.current_clip = Clip(self.fps, self.output_size)
+        self.current_clip = Clip(self.api, self.fps, self.output_size)
         self._clip_count = self.fps * self._clip_duration
 
         return True
@@ -151,7 +192,8 @@ class ClipManager():
                         processed_first_message = True
                         output_size, fps = cast(
                             tuple[tuple[int, int], int], data)
-                        clips = ClipManager(output_size, fps, CLIP_DURATION)
+                        clips = ClipManager(
+                            ClipsApi(), output_size, fps, CLIP_DURATION)
                     else:
                         data = cast(tuple[Mat, RegionsList], data)
                         frame_count += 1
@@ -167,6 +209,7 @@ class ClipManager():
                                         "Expected to recieve a clip")
                                 clip.write(output_dir.joinpath(
                                     f"{frame_count}.avi"))
+
                 except Exception:
                     (_, clip) = clips.try_complete()
                     if clip is not None:

@@ -6,6 +6,8 @@ using System.Numerics;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+var configuration = builder.Configuration;
+
 builder.Services.AddSignalR(configure =>
 {
     if (builder.Environment.IsDevelopment())
@@ -13,14 +15,15 @@ builder.Services.AddSignalR(configure =>
         configure.EnableDetailedErrors = true;
     }
 });
+
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    options.UseSqlite(":memory");
+    options.UseSqlite(configuration.GetConnectionString("Default"));
 });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApiDocument();
-
 builder.Services.AddScoped<ClipHub>();
+builder.Services.AddHostedService<DatabaseStartupService>();
 
 var app = builder.Build();
 
@@ -33,12 +36,14 @@ app.MapPost("clips", async (ClipData data, AppDbContext db, ClipHub hub) =>
     var clip = new Clip
     {
         Id = Guid.NewGuid(),
-        CreatedAt = DateTimeOffset.UtcNow,
+        Data = data.Data,
         Name = Guid.NewGuid().ToString(),
+        DateRecorded = data.DateRecorded,
+        CreatedAt = DateTimeOffset.UtcNow,
         Detections = data.Detections.Select(d => new Detection
         {
-            Timestamp = d.Timestamp,
-            BoundingBox = d.BoundingBox,
+            Timestamp = TimeSpan.FromMilliseconds(d.Timestamp),
+            BoundingBox = new Vector4(d.BoundingBox[0], d.BoundingBox[1], d.BoundingBox[2], d.BoundingBox[3]),
         }).ToArray()
     };
 
@@ -78,6 +83,12 @@ app.MapGet("clips/{id:guid}", (Guid id, AppDbContext db) =>
 }).WithTags("clips");
 
 app.MapHub<ClipHub>("/clipHub");
+
+var scopeFactory = app.Services.GetRequiredService<IServiceScopeFactory>();
+using var scope = scopeFactory.CreateScope();
+var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+db.Database.EnsureCreated();
+
 app.Run();
 
 public static class JsonOptions
@@ -92,14 +103,15 @@ public static class JsonOptions
 
 public sealed class ClipData
 {
-    public required DateTimeOffset Date { get; init; }
+    public byte[] Data { get; init; } = Array.Empty<byte>();
+    public DateTimeOffset DateRecorded { get; init; }
     public DetectionInfoData[] Detections { get; init; } = Array.Empty<DetectionInfoData>();
 }
 
 public sealed class DetectionInfoData
 {
-    public TimeSpan Timestamp { get; init; }
-    public Vector2[] BoundingBox { get; init; } = Array.Empty<Vector2>();
+    public int Timestamp { get; init; }
+    public float[] BoundingBox { get; init; } = Array.Empty<float>();
 }
 
 public interface IClipHub
@@ -121,30 +133,28 @@ public interface ICreatable
     DateTimeOffset CreatedAt { get; init; }
 }
 
-public interface IEntity : ICreatable
-{
-    Guid Id { get; init; }
-}
-
 public interface IUpdateable
 {
-    DateTimeOffset ModifiedAt { get; init; }
+    DateTimeOffset? ModifiedAt { get; init; }
 }
 
-public sealed class Clip : IEntity
+public sealed class Clip : ICreatable, IUpdateable
 {
     public Guid Id { get; init; }
-    public DateTimeOffset CreatedAt { get; init; }
     public string Name { get; init; }
-    public Detection[] Detections { get; init; } = Array.Empty<Detection>();
-
+    public byte[] Data { get; init; } = Array.Empty<byte>();
+    public DateTimeOffset DateRecorded { get; init; }
+    public DateTimeOffset CreatedAt { get; init; }
+    public ICollection<Detection> Detections { get; init; } = Array.Empty<Detection>();
+    public DateTimeOffset? ModifiedAt { get; init; }
 }
 
 public sealed class Detection
 {
+    public Guid Id { get; init; }
     public Guid ClipId { get; init; }
     public TimeSpan Timestamp { get; init; }
-    public Vector2[] BoundingBox { get; init; } = Array.Empty<Vector2>();
+    public Vector4 BoundingBox { get; init; }
 }
 public sealed class AppDbContext : DbContext
 {
@@ -162,7 +172,7 @@ public sealed class AppDbContext : DbContext
 
         modelBuilder.Entity<Detection>()
             .Property(x => x.BoundingBox)
-            .HasConversion(JsonValueConverter<Vector2>.Instance);
+            .HasConversion(JsonValueConverter<Vector4>.Instance);
     }
 }
 
@@ -171,5 +181,20 @@ public sealed class JsonValueConverter<T> : ValueConverter<T, string>
     public static readonly JsonValueConverter<T> Instance = new();
     public JsonValueConverter() : base(x => JsonSerializer.Serialize(x, JsonOptions.Default), x => JsonSerializer.Deserialize<T>(x, JsonOptions.Default)!)
     {
+    }
+}
+
+public class DatabaseStartupService : BackgroundService
+{
+    private readonly IServiceProvider _serviceProvider;
+
+    public DatabaseStartupService(IServiceProvider serviceProvider)
+    {
+        _serviceProvider = serviceProvider;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+
     }
 }
