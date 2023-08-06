@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -31,7 +32,7 @@ app.UseHttpsRedirection();
 app.UseOpenApi();
 app.UseSwaggerUi3();
 
-app.MapPost("clips", async (ClipData data, AppDbContext db, ClipHub hub) =>
+app.MapPost("clips", async (ClipData data, AppDbContext db, IHubContext<ClipHub, IClipHub> hub) =>
 {
     var clip = new Clip
     {
@@ -49,7 +50,7 @@ app.MapPost("clips", async (ClipData data, AppDbContext db, ClipHub hub) =>
 
     db.Add(clip);
     await db.SaveChangesAsync();
-    await hub.ClipAddedAsync(clip.Id);
+    await hub.Clients.All.NewClipAdded(clip.Id);
 }).WithTags("clips");
 
 app.MapDelete("clips", (Guid id, AppDbContext db) =>
