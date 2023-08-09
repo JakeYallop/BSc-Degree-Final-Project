@@ -25,9 +25,16 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApiDocument();
 builder.Services.AddScoped<ClipHub>();
 builder.Services.AddHostedService<DatabaseStartupService>();
+builder.Services.AddCors();
 
 var app = builder.Build();
 
+app.UseCors(policy =>
+{
+    policy.AllowAnyHeader()
+        .AllowAnyOrigin()
+        .AllowAnyMethod();
+});
 app.UseHttpsRedirection();
 app.UseOpenApi();
 app.UseSwaggerUi3();
@@ -63,8 +70,9 @@ app.MapGet("clips", (AppDbContext db) =>
     return db.Clips.Select(x => new
     {
         x.Id,
-        x.CreatedAt,
+        x.DateRecorded,
         x.Name,
+        Thumbnail = null as byte[],
     }).ToListAsync();
 }).WithTags("clips");
 
