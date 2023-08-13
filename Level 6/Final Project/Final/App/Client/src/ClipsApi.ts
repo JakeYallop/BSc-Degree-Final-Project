@@ -18,8 +18,20 @@ const getClips = async () => {
 	return data.json();
 };
 
+export interface ClipData {
+	id: string;
+	name: string;
+	detections: {
+		timestamp: number;
+		boundinBox: [x: number, y: number, w: number, h: number];
+	};
+}
+
+const getClip = (id: string) => http.get<ClipData>(u(id));
+
 const ClipsApi = {
 	getClips,
+	getClip,
 };
 
 export default ClipsApi;

@@ -1,11 +1,11 @@
-import { Box, Paper, Stack, Typography, darken, lighten, styled, useTheme } from "@mui/material";
+import { Box, Paper, Stack, StackProps, Typography, darken, lighten, styled, useTheme } from "@mui/material";
 import ClipsApi, { ClipInfoItem } from "../../ClipsApi.ts";
 import { useEffect, useState } from "react";
 import AsyncRender from "../AsyncRender.tsx";
 import LoadableImage from "../LoadableImage.tsx";
 import Thumbnail from "../Thumbnail.tsx";
 
-export interface ClipListProps {
+export interface ClipListProps extends Omit<StackProps, "children" | "direction"> {
 	clips: ClipInfoItem[] | null;
 }
 const ClipList = (props: ClipListProps) => {

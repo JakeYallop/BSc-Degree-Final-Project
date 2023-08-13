@@ -1,10 +1,11 @@
-using Microsoft.AspNetCore;
+﻿using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using System.Linq.Expressions;
 using System.Numerics;
 using System.Text.Json;
+using Web;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -24,7 +25,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApiDocument();
 builder.Services.AddScoped<ClipHub>();
-builder.Services.AddHostedService<DatabaseStartupService>();
+builder.Services.AddSingleton<FileService>();
+//builder.Services.AddHostedService<DatabaseStartupService>();
 builder.Services.AddCors();
 
 var app = builder.Build();
@@ -39,12 +41,12 @@ app.UseHttpsRedirection();
 app.UseOpenApi();
 app.UseSwaggerUi3();
 
-app.MapPost("clips", async (ClipData data, AppDbContext db, IHubContext<ClipHub, IClipHub> hub) =>
+app.MapPost("clips", async (ClipData data, AppDbContext db, IHubContext<ClipHub, IClipHub> hub, FileService fileService) =>
 {
     var clip = new Clip
     {
         Id = Guid.NewGuid(),
-        Data = data.Data,
+        FileId = await fileService.StoreFileAsync(data.Data, ".mp4"),
         Name = Guid.NewGuid().ToString(),
         DateRecorded = data.DateRecorded,
         CreatedAt = DateTimeOffset.UtcNow,
@@ -76,19 +78,43 @@ app.MapGet("clips", (AppDbContext db) =>
     }).ToListAsync();
 }).WithTags("clips");
 
-app.MapGet("clips/{id:guid}", (Guid id, AppDbContext db) =>
+app.MapGet("clips/{id:guid}", async (Guid id, AppDbContext db, FileService fileService, HttpContext httpContext) =>
 {
-    return db.Clips.Select(x => new
+    var clip = await db.Clips.Select(x => new
     {
         x.Id,
-        x.CreatedAt,
         x.Name,
+        x.FileId,
         Detections = x.Detections.Select(d => new
         {
             d.Timestamp,
             d.BoundingBox,
         }).ToArray()
     }).FirstOrDefaultAsync(x => x.Id == id);
+
+    if (clip is null)
+    {
+        return Results.NotFound();
+    }
+
+    var path = $"{httpContext.Request.Host}/clips/{id}/video/{clip.FileId}";
+    return Results.Json(new
+    {
+        clip.Id,
+        clip.Name,
+        clip.Detections,
+        Video = path
+
+    }, JsonOptions.Default);
+
+}).WithTags("clips");
+
+app.MapGet("clips/{id:guid}/video/{fileId:guid}", async (Guid id, Guid fileId, AppDbContext db, FileService fileService) =>
+{
+    var exists = db.Clips.AnyAsync(x => x.Id == id && x.FileId == fileId);
+    var stream = fileService.GetFileAsync(fileId);
+    await exists;
+    return stream;
 }).WithTags("clips");
 
 app.MapHub<ClipHub>("/clipHub");
@@ -150,8 +176,8 @@ public interface IUpdateable
 public sealed class Clip : ICreatable, IUpdateable
 {
     public Guid Id { get; init; }
-    public string Name { get; init; }
-    public byte[] Data { get; init; } = Array.Empty<byte>();
+    public string Name { get; init; } = null!;
+    public Guid FileId { get; init; }
     public DateTimeOffset DateRecorded { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public ICollection<Detection> Detections { get; init; } = Array.Empty<Detection>();
@@ -193,17 +219,40 @@ public sealed class JsonValueConverter<T> : ValueConverter<T, string>
     }
 }
 
-public class DatabaseStartupService : BackgroundService
-{
-    private readonly IServiceProvider _serviceProvider;
+//public class DatabaseStartupService : BackgroundService
+//{
+//    private readonly IServiceProvider _serviceProvider;
 
-    public DatabaseStartupService(IServiceProvider serviceProvider)
+//    public DatabaseStartupService(IServiceProvider serviceProvider)
+//    {
+//        _serviceProvider = serviceProvider;
+//    }
+
+//    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+//    {
+
+//    }
+//}
+
+
+public sealed class FileService
+{
+    public FileService()
     {
-        _serviceProvider = serviceProvider;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task<Guid> StoreFileAsync(byte[] data, string extension)
     {
+        var id = Guid.NewGuid();
+        var path = $"store/{id}";
+        await File.WriteAllBytesAsync(path, data);
+        return id;
+    }
 
+    public Task<Stream> GetFileAsync(Guid fileId)
+    {
+        var path = $"store/{fileId}";
+        var stream = File.OpenRead(path);
+        return Task.FromResult<Stream>(stream);
     }
 }

@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
+
+    <Nullable>enable</Nullable>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>preview-all</AnalysisLevel>
+    <AnalysisMode>all</AnalysisMode>
+    <WarningLevel>9999</WarningLevel>
+    <WarningsAsErrors>true</WarningsAsErrors>
+  </PropertyGroup>
+    
+</Project>
