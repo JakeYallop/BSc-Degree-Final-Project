@@ -1,4 +1,4 @@
-import { Box, Paper, Stack, StackProps, Typography, darken, lighten, styled, useTheme } from "@mui/material";
+import { Box, Divider, Paper, Stack, StackProps, Typography, darken, lighten, styled, useTheme } from "@mui/material";
 import ClipsApi, { ClipInfoItem } from "../../ClipsApi.ts";
 import { useEffect, useState } from "react";
 import AsyncRender from "../AsyncRender.tsx";
@@ -7,17 +7,19 @@ import Thumbnail from "../Thumbnail.tsx";
 
 export interface ClipListProps extends Omit<StackProps, "children" | "direction"> {
 	clips: ClipInfoItem[] | null;
+	onClipSelected?: (id: string) => void;
 }
 const ClipList = (props: ClipListProps) => {
 	const [activeId, setActiveId] = useState<string | null>(null);
-	const { clips } = props;
+	const { clips, onClipSelected } = props;
 
 	const handleClipClick = (id: string) => {
 		setActiveId(id);
+		onClipSelected?.(id);
 	};
 
 	return (
-		<Stack divider spacing={0}>
+		<Stack spacing={0}>
 			<AsyncRender loading={!clips}>
 				{clips &&
 					clips.map((c) => {

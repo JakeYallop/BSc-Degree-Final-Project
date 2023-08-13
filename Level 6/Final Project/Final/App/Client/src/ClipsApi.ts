@@ -25,6 +25,7 @@ export interface ClipData {
 		timestamp: number;
 		boundinBox: [x: number, y: number, w: number, h: number];
 	};
+	url: string;
 }
 
 const getClip = (id: string) => http.get<ClipData>(u(id));

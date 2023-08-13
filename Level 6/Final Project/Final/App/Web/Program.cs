@@ -26,7 +26,6 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApiDocument();
 builder.Services.AddScoped<ClipHub>();
 builder.Services.AddSingleton<FileService>();
-//builder.Services.AddHostedService<DatabaseStartupService>();
 builder.Services.AddCors();
 
 var app = builder.Build();
@@ -103,7 +102,7 @@ app.MapGet("clips/{id:guid}", async (Guid id, AppDbContext db, FileService fileS
         clip.Id,
         clip.Name,
         clip.Detections,
-        Video = path
+        Url = path
 
     }, JsonOptions.Default);
 
@@ -218,22 +217,6 @@ public sealed class JsonValueConverter<T> : ValueConverter<T, string>
     {
     }
 }
-
-//public class DatabaseStartupService : BackgroundService
-//{
-//    private readonly IServiceProvider _serviceProvider;
-
-//    public DatabaseStartupService(IServiceProvider serviceProvider)
-//    {
-//        _serviceProvider = serviceProvider;
-//    }
-
-//    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-//    {
-
-//    }
-//}
-
 
 public sealed class FileService
 {

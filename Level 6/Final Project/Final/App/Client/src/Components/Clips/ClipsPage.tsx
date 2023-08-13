@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import ClipsApi, { ClipData, ClipInfoItem } from "../../ClipsApi.ts";
 import ClipList from "./ClipList.tsx";
+import { Stack } from "@mui/material";
+import { MediaPlayer, MediaOutlet } from "@vidstack/react";
 
 const ClipsPage = () => {
 	const [clips, setClips] = useState<ClipInfoItem[] | null>(null);
@@ -30,7 +32,16 @@ const ClipsPage = () => {
 		getClip();
 	}, [selectedClipId]);
 
-	return <ClipList clips={clips}></ClipList>;
+	const handleClipSelected = (id: string) => {
+		setSelectedClipId(id);
+	};
+
+	return (
+		<Stack direction="row">
+			<ClipList clips={clips} onClipSelected={handleClipSelected}></ClipList>
+			<Stack>{clip && <ClipView clip={clip}></ClipView>}</Stack>
+		</Stack>
+	);
 };
 
 export default ClipsPage;
@@ -47,5 +58,13 @@ interface VideoPlayerProps {
 	clip: ClipData;
 }
 const VideoPlayer = (props: VideoPlayerProps) => {
-	return <></>;
+	const {
+		clip: { url },
+	} = props;
+
+	return (
+		<MediaPlayer src={[{ src: url, type: "video/mp4" }]}>
+			<MediaOutlet />
+		</MediaPlayer>
+	);
 };
