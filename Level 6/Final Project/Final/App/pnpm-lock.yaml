@@ -58,6 +58,9 @@ importers:
         specifier: ^0.16.0
         version: 0.16.0(react-dom@18.2.0)(react@18.2.0)
     devDependencies:
+      '@gautemo/vite-plugin-service-worker':
+        specifier: ^0.0.3
+        version: 0.0.3
       '@types/react':
         specifier: ^18.2.15
         version: 18.2.15
@@ -522,6 +525,10 @@ packages:
   /@fontsource/roboto@5.0.7:
     resolution: {integrity: sha512-Hcl5xloy9PH+hCGnKTl9Xg7SOXbvSFIg+AW2JZ5qrsAZBI9IEC4kwma6D/aTl9ywvsdEp+7TeVT2fmFImXyHTw==}
     dev: false
+
+  /@gautemo/vite-plugin-service-worker@0.0.3:
+    resolution: {integrity: sha512-vKczEXfJVB6qQt+0YIiqt587NpZgtQZGVzwHB2ffHqW6rMwhcgwMAkSfSgHJzNOGhe532GmB+BgcNT035g0dYw==}
+    dev: true
 
   /@humanwhocodes/config-array@0.11.10:
     resolution: {integrity: sha512-KVVjQmNUepDVGXNuoRRdmmEjruj0KfiGSbS8LVc12LMsWDQzRXJ0qdhN8L8uUigKpfEHRhlaQFY0ib1tnUbNeQ==}
