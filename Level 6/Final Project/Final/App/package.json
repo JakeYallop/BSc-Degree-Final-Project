@@ -1,0 +1,19 @@
+{
+	"name": "Workspace",
+	"private": true,
+	"version": "0.0.0",
+	"scripts": {
+		"keys": "vite-node ./scripts/generate-vapid-keys.ts",
+		"dev": "pnpm run push && pnpm run client",
+		"push": "pnpm run -F pushnotifications main",
+		"client": "pnpm run -F client dev"
+	},
+	"dependencies": {
+		"dotenv": "^16.3.1",
+		"vite-node": "^0.34.2",
+		"web-push": "^3.6.4"
+	},
+	"devDependencies": {
+		"@types/web-push": "^3.3.2"
+	}
+}

@@ -19,6 +19,9 @@ dependencies:
     version: 3.6.4
 
 devDependencies:
+  '@types/web-push':
+    specifier: ^3.3.2
+    version: 3.3.2
   pino-pretty:
     specifier: ^10.2.0
     version: 10.2.0
@@ -244,6 +247,16 @@ packages:
     dependencies:
       fast-json-stringify: 5.8.0
     dev: false
+
+  /@types/node@20.5.1:
+    resolution: {integrity: sha512-4tT2UrL5LBqDwoed9wZ6N3umC4Yhz3W3FloMmiiG4JwmUJWpie0c7lcnUNd4gtMKuDEO4wRVS8B6Xa0uMRsMKg==}
+    dev: true
+
+  /@types/web-push@3.3.2:
+    resolution: {integrity: sha512-JxWGVL/m7mWTIg4mRYO+A6s0jPmBkr4iJr39DqJpRJAc+jrPiEe1/asmkwerzRon8ZZDxaZJpsxpv0Z18Wo9gw==}
+    dependencies:
+      '@types/node': 20.5.1
+    dev: true
 
   /abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}

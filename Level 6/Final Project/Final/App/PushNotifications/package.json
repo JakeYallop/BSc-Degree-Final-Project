@@ -1,10 +1,12 @@
 {
-	"name": "PushNotifications",
+	"name": "pushnotifications",
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
-		"start": "vite-node main.ts"
+		"keys": "vite-node ./scripts/generate-vapid-keys.ts",
+		"start": "pnpm run keys && pnpm run main",
+		"main": "vite-node main.ts"
 	},
 	"dependencies": {
 		"fastify": "^4.21.0",
@@ -13,6 +15,7 @@
 		"web-push": "^3.6.4"
 	},
 	"devDependencies": {
+		"@types/web-push": "^3.3.2",
 		"pino-pretty": "^10.2.0"
 	}
 }
