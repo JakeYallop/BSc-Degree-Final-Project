@@ -14,13 +14,18 @@ export interface ClipInfoItem {
 }
 
 const getClips = async () => {
-	const data = await http.get<ClipInfoItem[]>(u());
-	return data.json();
+	const resp = await http.get<ClipInfoItem[]>(u());
+	const data = await resp.json();
+	return data.map((x) => {
+		x.dateRecorded = new Date(x.dateRecorded);
+		return x;
+	});
 };
 
 export interface ClipData {
 	id: string;
 	name: string;
+	dateRecorded: string;
 	detections: {
 		timestamp: number;
 		boundinBox: [x: number, y: number, w: number, h: number];
@@ -30,9 +35,12 @@ export interface ClipData {
 
 const getClip = (id: string) => http.get<ClipData>(u(id));
 
+const updateName = (id: string, name: string) => http.putAsJson(u(`${id}/name`), { name });
+
 const ClipsApi = {
 	getClips,
 	getClip,
+	updateName,
 };
 
 export default ClipsApi;

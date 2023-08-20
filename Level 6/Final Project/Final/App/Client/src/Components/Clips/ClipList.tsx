@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AsyncRender from "../AsyncRender.tsx";
 import LoadableImage from "../LoadableImage.tsx";
 import Thumbnail from "../Thumbnail.tsx";
+import { formatDate } from "../FormattedDate.ts";
 
 export interface ClipListProps extends Omit<StackProps, "children" | "direction"> {
 	clips: ClipInfoItem[] | null;
@@ -11,7 +12,7 @@ export interface ClipListProps extends Omit<StackProps, "children" | "direction"
 }
 const ClipList = (props: ClipListProps) => {
 	const [activeId, setActiveId] = useState<string | null>(null);
-	const { clips, onClipSelected } = props;
+	const { clips, onClipSelected, ...rest } = props;
 
 	const handleClipClick = (id: string) => {
 		setActiveId(id);
@@ -19,7 +20,7 @@ const ClipList = (props: ClipListProps) => {
 	};
 
 	return (
-		<Stack spacing={0}>
+		<Stack spacing={0} {...rest}>
 			<AsyncRender loading={!clips}>
 				{clips &&
 					clips.map((c) => {
@@ -76,7 +77,7 @@ const ClipItem = (props: ClipItemProps) => {
 							Date recorded:{" "}
 						</Typography>
 						<Typography display="inline" variant="body1">
-							{clip.name}
+							{formatDate(clip.dateRecorded)}
 						</Typography>
 					</Box>
 				</Stack>

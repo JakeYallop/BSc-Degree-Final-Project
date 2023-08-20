@@ -1,0 +1,3 @@
+# Executing
+
+Run `pnpm start`

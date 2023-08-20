@@ -41,7 +41,7 @@ def is_key(input, key):
     return input & 0xFF == ord(key)
 
 
-RUN_AT_FRAMERATE = True
+RUN_AT_FRAMERATE = False
 solver = morphology_solver()
 
 
@@ -85,13 +85,13 @@ def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignor
                 frame_count += 1
 
                 # show the original video frame
-                display("original", current_frame, True)
+                display("original", current_frame, False)
 
                 roi_x = 0
                 roi_y = 0
                 region_of_interest = current_frame[roi_y:, roi_x:]
 
-                (contours, _) = solver.solve(region_of_interest, debug=True)
+                (contours, _) = solver.solve(region_of_interest, debug=False)
                 matched_contours = []
                 has_large_contours = False
                 for contour in contours:
@@ -145,11 +145,12 @@ def capture(capture: VideoCapture, queue: multiprocessing.Queue):  # type: ignor
                     "contours", current_frame)
 
                 frame_end = time.time()
-                duration = int((frame_end - frame_start) * 1000)
-                wait = fps_ms - duration
+                duration_s = frame_end - frame_start
+                # duration = int(duration_s * 1000)
+                wait = fps - duration_s
                 key = None
                 if wait > 0 and RUN_AT_FRAMERATE:
-                    key = cv2.waitKey(wait)
+                    key = cv2.waitKey(int(wait * 1000.0))
                 else:
                     key = cv2.waitKey(1)
                 if is_key(key, "q"):
@@ -202,5 +203,8 @@ if __name__ == "__main__":
         exit(1)
 
     queue = multiprocessing.Queue()
-    clip_manager.start_processing(queue, Path("./clips"))
-    capture(video, queue)
+    while True:
+        clip_manager.start_processing(queue, Path("./clips"))
+        capture(video, queue)
+        video = cv2.VideoCapture(
+            deviceOrPath)

@@ -84,7 +84,7 @@ class morphology_solver():
         return smoothed
 
     def solve(self, current_frame, debug=True):
-        preprocessed = self._preprocess(current_frame, debug=True)
+        preprocessed = self._preprocess(current_frame, debug=debug)
 
         if self.reference_frame is None:
             self._unprocessed_ref_frame = current_frame
@@ -92,7 +92,7 @@ class morphology_solver():
 
         self._display("Reference frame", self._unprocessed_ref_frame, debug)
         foreground = self._process(self.reference_frame, preprocessed, debug)
-        self._display("Final Foregound", foreground)
+        self._display("Final Foregound", foreground, debug)
         return cv2.findContours(foreground,
                                 cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 

@@ -44,9 +44,9 @@ def compress_core(path: Path, crf: Optional[int], output_path: Path):
         .input(path)
         .output(
             output_path,
-            {"c:v": "libx265"},
+            {"c:v": "libx264"},
             preset="medium",
-            crf=crf if crf is not None else map_compression_level_to_crf("h"),
+            crf=crf if crf is not None else map_compression_level_to_crf("m"),
         )
     )
 

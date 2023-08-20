@@ -35,14 +35,17 @@ class ClipsApi():
         self.session.verify = False
         pass
 
-    def add_clip(self, dateRecorded: datetime.datetime, clip_path: Path, detections: list[FrameInfo]):
+    def _compute_timestamp_in_ms(self, fps: float, frame_number):
+        return int((frame_number / fps) * 1000)
+
+    def add_clip(self, dateRecorded: datetime.datetime, clip_path: Path, fps: float, detections: list[FrameInfo]):
         with open(clip_path, "rb") as cf:
 
             detection_data = []
             for _, d in enumerate(detections):
                 for _, r in enumerate(d.regions):
                     detection_data.append(
-                        {"timestamp": d.frame_number, "boundingBox": r.bounding_box})
+                        {"timestamp": self._compute_timestamp_in_ms(fps, d.frame_number), "boundingBox": r.bounding_box})
 
             data = cf.read()
             url = self.make_url("/clips")
@@ -50,7 +53,6 @@ class ClipsApi():
             r = self.session.post(url, json={
                 "dateRecorded": dateRecorded.isoformat(),
                 "data": base64.b64encode(data).decode(),
-                # TODO: store and post timestamp in frameInfo
                 "detections": detection_data
             })
 
@@ -91,14 +93,17 @@ class Clip():
     def _onComplete(self, path: Path, output_path: Path):
         print(f"Saved to {output_path}")
         # TODO: Record recorded date
-        self.api.add_clip(datetime.datetime.utcnow(), output_path, self.frames)
+        self.api.add_clip(datetime.datetime.utcnow(),
+                          output_path, self.fps, self.frames)
 
         print(f"Removing original {path}")
         os.remove(path)
+        print(f"Removing compressed {output_path}")
+        os.remove(output_path)
 
-        print(f"json output")
-        with open(output_path.with_suffix(".json"), "w") as f:
-            json.dump(self.frames, f, default=serializer, indent=2)
+        # print(f"json output")
+        # with open(output_path.with_suffix(".json"), "w") as f:
+        #     json.dump(self.frames, f, default=serializer, indent=2)
         print("done write")
 
 
