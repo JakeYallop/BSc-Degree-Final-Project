@@ -75,7 +75,8 @@ app.MapPost("clips", async (ClipInfo data, AppDbContext db, IHubContext<ClipHub,
     db.Add(clip);
     var task1 = db.SaveChangesAsync();
     var task2 = hub.Clients.All.NewClipAdded(clip.Id);
-    var task3 = client.NotifyAsync(new Notification("New motion detected", $"New motion was detected at {clip.DateRecorded}."));
+    Console.WriteLine(clip.DateRecorded.Kind);
+    var task3 = client.NotifyAsync(new Notification("New motion detected", $"New motion was detected at {clip.DateRecorded.ToLocalTime()}."));
     await Task.WhenAll(task1, task2, task3);
 
 }).WithTags("clips");

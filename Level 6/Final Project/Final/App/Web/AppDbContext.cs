@@ -14,6 +14,9 @@ public sealed class AppDbContext : DbContext
         modelBuilder.Entity<Clip>()
             .HasMany(c => c.Detections)
             .WithOne();
+        modelBuilder.Entity<Clip>()
+            .Property(x => x.DateRecorded)
+            .HasConversion(x => x, x => new DateTime(x.Ticks, DateTimeKind.Utc));
 
         modelBuilder.Entity<Detection>()
             .Property(x => x.BoundingBox)
