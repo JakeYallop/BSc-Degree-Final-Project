@@ -30,14 +30,19 @@ app.get("/", async (request, reply) => {
 	return "Hello World";
 });
 
-app.post("/notify", async (request, reply) => {
+interface NotificationBody {
+	title?: string;
+	body?: string;
+}
+
+app.post<{ Body: NotificationBody }>("/notify", async (request, reply) => {
 	try {
 		app.log.info("Received request to create notification");
 		await webpush.sendNotification(
 			subscription,
 			JSON.stringify({
-				title: "Test notiifcation",
-				body: "This is a test notification",
+				title: request.body?.title || "",
+				body: request.body?.body || "",
 			}),
 			{
 				vapidDetails: {

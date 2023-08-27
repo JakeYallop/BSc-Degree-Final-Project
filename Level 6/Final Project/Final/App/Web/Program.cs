@@ -3,10 +3,11 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using System.Globalization;
 using System.Linq.Expressions;
 using System.Numerics;
 using System.Text.Json;
+using Web.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -26,7 +27,10 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddSingleton<FileService>();
 builder.Services.AddHostedService<FileServiceStartupService>();
 builder.Services.AddScoped<ClipHub>();
-builder.Services.AddHttpClient();
+builder.Services.AddHttpClient<NotificationsClient>(client =>
+{
+    client.BaseAddress = new Uri(configuration["NotificationsBaseUrl"] ?? throw new InvalidOperationException("Missing configuration value for NotificationsBaseUrl"));
+});
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApiDocument(options =>
@@ -52,7 +56,7 @@ app.UseSwaggerUi3(configure =>
     configure.DocumentTitle = "Camera Motion Detection API";
 });
 
-app.MapPost("clips", async (ClipInfo data, AppDbContext db, IHubContext<ClipHub, IClipHub> hub, FileService fileService) =>
+app.MapPost("clips", async (ClipInfo data, AppDbContext db, IHubContext<ClipHub, IClipHub> hub, FileService fileService, NotificationsClient client) =>
 {
     var clip = new Clip
     {
@@ -69,8 +73,11 @@ app.MapPost("clips", async (ClipInfo data, AppDbContext db, IHubContext<ClipHub,
     };
 
     db.Add(clip);
-    await db.SaveChangesAsync();
-    await hub.Clients.All.NewClipAdded(clip.Id);
+    var task1 = db.SaveChangesAsync();
+    var task2 = hub.Clients.All.NewClipAdded(clip.Id);
+    var task3 = client.NotifyAsync(new Notification("New motion detected", $"New motion was detected at {clip.DateRecorded}."));
+    await Task.WhenAll(task1, task2, task3);
+
 }).WithTags("clips");
 
 app.MapDelete("clips", (Guid id, AppDbContext db, CancellationToken cancellation) =>
@@ -175,9 +182,9 @@ app.MapPut("admin/clearall", async (AppDbContext db, ILoggerFactory factory, Can
 .WithSummary("Only available when running the API in Debug mode");
 
 
-app.MapPut("admin/push", async ([FromServices] HttpClient client) =>
+app.MapPut("admin/push", async ([FromServices] NotificationsClient client) =>
 {
-    await client.PostAsJsonAsync("http://localhost:3000/notify", new { });
+    return client.NotifyAsync(new Notification("Test Notification", "Test notification from the API"));
 }).WithTags("admin")
 .WithDescription("Clear and delete all resources")
 .WithSummary("Only available when running the API in Debug mode");;
@@ -191,17 +198,6 @@ var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 db.Database.EnsureCreated();
 app.Run();
 
-
-public static class HttpContextExtensions
-{
-    public static string BaseUrl(this HttpContext context) => $"{context.Request.Scheme}://{context.Request.Host}";
-}
-
-public sealed class NameInfo
-{
-    public string Name { get; init; } = null!;
-}
-
 public static class JsonOptions
 {
     public static JsonSerializerOptions Default { get; } = new()
@@ -210,50 +206,6 @@ public static class JsonOptions
         PropertyNameCaseInsensitive = true,
         WriteIndented = false,
     };
-}
-
-public sealed class ClipInfo
-{
-    public byte[] Data { get; init; } = Array.Empty<byte>();
-    public DateTimeOffset DateRecorded { get; init; }
-    public DetectionInfoData[] Detections { get; init; } = Array.Empty<DetectionInfoData>();
-}
-
-public sealed class ClipData
-{
-    public Guid Id { get; init; }
-    public string Name { get; init; } = null!;
-    public DateTimeOffset DateRecorded { get; init; }
-    public string Url { get; init; } = null!;
-    public IEnumerable<DetectionData> Detections { get; init; } = Array.Empty<DetectionData>();
-
-    public static ClipData MapFrom(Clip clip, string baseUrl)
-    {
-        return new ClipData()
-        {
-            Id = clip.Id,
-            Name = clip.Name,
-            DateRecorded = clip.DateRecorded,
-            Url = $"{baseUrl}/clips/{clip.Id}/video/{clip.FileId}.mp4",
-            Detections = clip.Detections.Select(x => new DetectionData()
-            {
-                Timestamp = x.Timestamp.Milliseconds,
-                BoundingBox = new[] { x.BoundingBox.X, x.BoundingBox.Y, x.BoundingBox.Z, x.BoundingBox.W },
-            }),
-        };
-    }
-}
-
-public sealed class DetectionData
-{
-    public int Timestamp { get; init; }
-    public float[] BoundingBox { get; init; } = Array.Empty<float>();
-}
-
-public sealed class DetectionInfoData
-{
-    public int Timestamp { get; init; }
-    public float[] BoundingBox { get; init; } = Array.Empty<float>();
 }
 
 public interface IClipHub
@@ -271,96 +223,6 @@ public sealed class ClipHub : Hub<IClipHub>
     }
 }
 
-public interface ICreatable
-{
-    DateTimeOffset CreatedAt { get; init; }
-}
-
-public interface IUpdateable
-{
-    DateTimeOffset? ModifiedAt { get; set; }
-}
-
-public sealed class Clip : ICreatable, IUpdateable
-{
-    public Guid Id { get; set; }
-    public string Name { get; set; } = null!;
-    public Guid FileId { get; set; }
-    public DateTimeOffset DateRecorded { get; set; }
-    public DateTimeOffset CreatedAt { get; init; }
-    public ICollection<Detection> Detections { get; set; } = Array.Empty<Detection>();
-    public DateTimeOffset? ModifiedAt { get; set; }
-
-    public void Update()
-    {
-        ModifiedAt = DateTime.UtcNow;
-    }
-
-}
-
-public sealed class Detection
-{
-    public Guid Id { get; init; }
-    public Guid ClipId { get; init; }
-    public TimeSpan Timestamp { get; init; }
-    public Vector4 BoundingBox { get; init; }
-}
-public sealed class AppDbContext : DbContext
-{
-    public DbSet<Clip> Clips { get; set; } = null!;
-
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
-    {
-    }
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<Clip>()
-            .HasMany(c => c.Detections)
-            .WithOne();
-
-        modelBuilder.Entity<Detection>()
-            .Property(x => x.BoundingBox)
-            .HasConversion(JsonValueConverter<Vector4>.Instance);
-    }
-}
-
-public sealed class JsonValueConverter<T> : ValueConverter<T, string>
-{
-    public static readonly JsonValueConverter<T> Instance = new();
-    public JsonValueConverter() : base(x => JsonSerializer.Serialize(x, JsonOptions.Default), x => JsonSerializer.Deserialize<T>(x, JsonOptions.Default)!)
-    {
-    }
-}
-
-public sealed class FileService
-{
-    public FileService()
-    {
-    }
-
-    public async Task<Guid> StoreFileAsync(byte[] data, string extension, CancellationToken cancellationToken = default)
-    {
-        var id = Guid.NewGuid();
-        var path = $"store/{id}";
-        await File.WriteAllBytesAsync(path, data, cancellationToken);
-        return id;
-    }
-
-    public Task<Stream> GetFileAsync(Guid fileId, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var path = $"store/{fileId}";
-        var stream = File.OpenRead(path);
-        if (cancellationToken.IsCancellationRequested)
-        {
-            stream.Dispose();
-            throw new OperationCanceledException();
-        }
-        return Task.FromResult<Stream>(stream);
-    }
-}
-
 public sealed class FileServiceStartupService : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -371,4 +233,18 @@ public sealed class FileServiceStartupService : BackgroundService
         }
         return Task.CompletedTask;
     }
+}
+
+public sealed class NotificationsClient
+{
+    private readonly HttpClient _client;
+
+    public NotificationsClient(HttpClient client)
+    {
+        _client = client;
+    }
+
+    public Task NotifyAsync(Notification notification)
+        => _client.PostAsJsonAsync("/notify", notification);
+
 }
