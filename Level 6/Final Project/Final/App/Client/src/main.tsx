@@ -8,6 +8,7 @@ import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
 import "@fontsource/roboto/700.css";
 import NotificationsApi from "./NotificationsApi.ts";
+import base64UrlToBytes from "./base64ToBytes.ts";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
 	<React.StrictMode>
@@ -37,7 +38,7 @@ Notification.requestPermission()
 
 		return sw.registration.pushManager.subscribe({
 			userVisibleOnly: true,
-			applicationServerKey: import.meta.env.VITE_VAPID_PUBLIC_KEY,
+			applicationServerKey: base64UrlToBytes(import.meta.env.VITE_VAPID_PUBLIC_KEY),
 		});
 	})
 	.then((subscription) => {

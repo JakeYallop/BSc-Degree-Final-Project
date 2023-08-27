@@ -37,7 +37,7 @@ const { envFile: envClient, resolvedEnvPath: envPathClient } = resolveEnv("Clien
 const VAPID_PUBLIC_KEY = "VITE_VAPID_PUBLIC_KEY";
 const VAPID_PRIVATE_KEY = "VITE_VAPID_PRIVATE_KEY";
 
-if (envPush[VAPID_PUBLIC_KEY] && envPush[VAPID_PRIVATE_KEY] && envClient[VAPID_PUBLIC_KEY]) {
+if (false && envPush[VAPID_PUBLIC_KEY] && envPush[VAPID_PRIVATE_KEY] && envClient[VAPID_PUBLIC_KEY]) {
 	console.log("VAPID keys already exist in .env or .env.local files.");
 	process.exit(0);
 }

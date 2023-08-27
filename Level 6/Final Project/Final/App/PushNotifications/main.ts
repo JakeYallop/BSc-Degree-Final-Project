@@ -33,7 +33,7 @@ app.get("/", async (request, reply) => {
 app.post("/notify", async (request, reply) => {
 	try {
 		app.log.info("Received request to create notification");
-		webpush.sendNotification(
+		await webpush.sendNotification(
 			subscription,
 			JSON.stringify({
 				title: "Test notiifcation",
