@@ -17,3 +17,5 @@ self.addEventListener("push", (event: PushEvent) => {
 
 	self.registration.showNotification(data.title, options);
 });
+
+self.registration.pushManager.getSubscription().then((subscription) => {});

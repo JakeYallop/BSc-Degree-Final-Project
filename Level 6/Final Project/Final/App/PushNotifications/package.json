@@ -4,11 +4,11 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
-		"keys": "vite-node ./scripts/generate-vapid-keys.ts",
-		"start": "pnpm run keys && pnpm run main",
+		"start": "pnpm run main",
 		"main": "vite-node main.ts"
 	},
 	"dependencies": {
+		"@fastify/cors": "^8.3.0",
 		"fastify": "^4.21.0",
 		"vite": "^4.4.9",
 		"vite-node": "^0.34.2",

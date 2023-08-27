@@ -7,7 +7,7 @@ export default defineConfig({
 	plugins: [
 		react(),
 		serviceWorker({
-			filename: "src/sw.ts",
+			filename: "sw.ts",
 		}),
 	],
 	build: {

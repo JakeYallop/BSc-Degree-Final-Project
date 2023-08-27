@@ -26,6 +26,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddSingleton<FileService>();
 builder.Services.AddHostedService<FileServiceStartupService>();
 builder.Services.AddScoped<ClipHub>();
+builder.Services.AddHttpClient();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApiDocument(options =>
@@ -172,6 +173,14 @@ app.MapPut("admin/clearall", async (AppDbContext db, ILoggerFactory factory, Can
 }).WithTags("admin")
 .WithDescription("Clear and delete all resources")
 .WithSummary("Only available when running the API in Debug mode");
+
+
+app.MapPut("admin/push", async ([FromServices] HttpClient client) =>
+{
+    await client.PostAsJsonAsync("http://localhost:3000/notify", new { });
+}).WithTags("admin")
+.WithDescription("Clear and delete all resources")
+.WithSummary("Only available when running the API in Debug mode");;
 #endif
 
 app.MapHub<ClipHub>("/clipHub");
