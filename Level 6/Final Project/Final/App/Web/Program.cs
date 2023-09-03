@@ -7,6 +7,8 @@ using System.Globalization;
 using System.Linq.Expressions;
 using System.Numerics;
 using System.Text.Json;
+using Web;
+using Web.Entities;
 using Web.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,6 +28,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 });
 builder.Services.AddSingleton<FileService>();
 builder.Services.AddHostedService<FileServiceStartupService>();
+builder.Services.AddSingleton<VideoService>();
+
 builder.Services.AddScoped<ClipHub>();
 builder.Services.AddHttpClient<NotificationsClient>(client =>
 {
@@ -91,7 +95,7 @@ app.MapGet("clips", (AppDbContext db, CancellationToken cancellation) =>
     return db.Clips.Select(x => new
     {
         x.Id,
-        x.DateRecorded,
+        DateRecorded = x.DateRecorded.ToLocalTime(),
         x.Name,
         Thumbnail = null as byte[],
     }).ToListAsync(cancellation);
@@ -103,7 +107,7 @@ app.MapGet("clips/{id:guid}", async (Guid id, AppDbContext db, FileService fileS
     {
         x.Id,
         x.Name,
-        x.DateRecorded,
+        DateRecorded = x.DateRecorded.ToLocalTime(),
         x.FileId,
         Detections = x.Detections.Select(d => new
         {

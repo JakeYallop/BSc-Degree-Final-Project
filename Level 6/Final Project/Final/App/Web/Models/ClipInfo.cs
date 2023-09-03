@@ -1,4 +1,5 @@
-﻿public sealed class ClipInfo
+﻿namespace Web.Models;
+public sealed class ClipInfo
 {
     public byte[] Data { get; init; } = Array.Empty<byte>();
     public DateTime DateRecorded { get; init; }

@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using System.Numerics;
+using Web.Entities;
 
+namespace Web;
 public sealed class AppDbContext : DbContext
 {
     public DbSet<Clip> Clips { get; set; } = null!;

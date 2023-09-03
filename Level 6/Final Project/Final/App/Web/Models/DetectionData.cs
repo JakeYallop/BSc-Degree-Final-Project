@@ -1,5 +1,6 @@
-﻿public sealed class DetectionData
+﻿namespace Web.Models;
+public sealed class DetectionData
 {
-    public int Timestamp { get; init; }
+    public double Timestamp { get; init; }
     public float[] BoundingBox { get; init; } = Array.Empty<float>();
 }

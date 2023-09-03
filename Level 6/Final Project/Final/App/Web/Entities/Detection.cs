@@ -1,5 +1,7 @@
 ﻿using System.Numerics;
 
+namespace Web.Entities;
+
 public sealed class Detection
 {
     public Guid Id { get; init; }

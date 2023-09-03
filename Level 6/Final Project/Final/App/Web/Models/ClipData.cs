@@ -1,8 +1,11 @@
-﻿public sealed class ClipData
+﻿using Web.Entities;
+
+namespace Web.Models;
+public sealed class ClipData
 {
     public Guid Id { get; init; }
     public string Name { get; init; } = null!;
-    public DateTimeOffset DateRecorded { get; init; }
+    public DateTime DateRecorded { get; init; }
     public string Url { get; init; } = null!;
     public IEnumerable<DetectionData> Detections { get; init; } = Array.Empty<DetectionData>();
 

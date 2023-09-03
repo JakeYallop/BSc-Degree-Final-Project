@@ -1,5 +1,4 @@
 ﻿namespace Web;
-
 public sealed class StorageService
 {
     public async Task<string> SaveBlobAsync(string filename, byte[] data)

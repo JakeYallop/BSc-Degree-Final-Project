@@ -1,4 +1,5 @@
-﻿public sealed class FileService
+﻿namespace Web;
+public sealed class FileService
 {
     public FileService()
     {

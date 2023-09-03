@@ -1,4 +1,5 @@
-﻿public sealed class Clip : ICreatable, IUpdateable
+﻿namespace Web.Entities;
+public sealed class Clip : ICreatable, IUpdateable
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = null!;
