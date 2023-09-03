@@ -15,7 +15,6 @@ public sealed class FileService
 
     public Task<Stream> GetFileAsync(Guid fileId, CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
         var path = $"store/{fileId}";
         var stream = File.OpenRead(path);
         if (cancellationToken.IsCancellationRequested)

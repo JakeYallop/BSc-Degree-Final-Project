@@ -8,6 +8,7 @@ using System.Linq.Expressions;
 using System.Numerics;
 using System.Text.Json;
 using Web;
+using Web.Classification;
 using Web.Entities;
 using Web.Models;
 
@@ -29,6 +30,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddSingleton<FileService>();
 builder.Services.AddHostedService<FileServiceStartupService>();
 builder.Services.AddSingleton<VideoService>();
+builder.Services.AddSingleton<ImageClassificationService>();
+builder.Services.AddSingleton<IImageClassifierSettings, EfficientNetLite4Settings>(_ => EfficientNetLite4Settings.Create(modelPath: "Classification/efficientnet-lite4-11.onnx", classesPath: "Classification/efficientnet_labels_processed.txt"));
 
 builder.Services.AddScoped<ClipHub>();
 builder.Services.AddHttpClient<NotificationsClient>(client =>
@@ -60,7 +63,14 @@ app.UseSwaggerUi3(configure =>
     configure.DocumentTitle = "Camera Motion Detection API";
 });
 
-app.MapPost("clips", async (ClipInfo data, AppDbContext db, IHubContext<ClipHub, IClipHub> hub, FileService fileService, NotificationsClient client) =>
+app.MapPost("clips", async (
+    ClipInfo data,
+    AppDbContext db,
+    IHubContext<ClipHub, IClipHub> hub,
+    FileService fileService,
+    NotificationsClient client,
+    ImageClassificationService classificationService,
+    VideoService videoService) =>
 {
     var clip = new Clip
     {
@@ -77,13 +87,23 @@ app.MapPost("clips", async (ClipInfo data, AppDbContext db, IHubContext<ClipHub,
     };
 
     db.Add(clip);
-    var task1 = db.SaveChangesAsync();
-    var task2 = hub.Clients.All.NewClipAdded(clip.Id);
+    var classifyTask = ClassifyAsync(fileService, classificationService, videoService, clip);
+    var dbTask = db.SaveChangesAsync();
+    var notifyClientTask = hub.Clients.All.NewClipAdded(clip.Id);
     Console.WriteLine(clip.DateRecorded.Kind);
-    var task3 = client.NotifyAsync(new Notification("New motion detected", $"New motion was detected at {clip.DateRecorded.ToLocalTime()}."));
-    await Task.WhenAll(task1, task2, task3);
-
+    var pushNotificationTask = client.NotifyAsync(new Notification("New motion detected", $"New motion was detected at {clip.DateRecorded.ToLocalTime()}."));
+   await Task.WhenAll(dbTask, notifyClientTask, pushNotificationTask, classifyTask);
 }).WithTags("clips");
+
+static async Task ClassifyAsync(FileService fileService, ImageClassificationService classificationService, VideoService videoService, Clip clip)
+{
+    var file = await fileService.GetFileAsync(clip.FileId);
+    var frameToClassify = await videoService.ExtractMostSignificantFrameAsync(file, clip.Detections.Select(x => (x.BoundingBox, x.Timestamp)).ToArray());
+    var ms = new MemoryStream(capacity: (int)frameToClassify.Length);
+    await frameToClassify.CopyToAsync(ms);
+    var classes = await classificationService.ClassifyAsync(ms.ToArray());
+    Console.WriteLine($"Classifier predicted:{Environment.NewLine}{string.Join(Environment.NewLine, classes.Select(x => $"{x.Class} {x.Confidence * 100:F5}%"))}");
+}
 
 app.MapDelete("clips", (Guid id, AppDbContext db, CancellationToken cancellation) =>
 {
@@ -187,7 +207,7 @@ app.MapPut("admin/clearall", async (AppDbContext db, ILoggerFactory factory, Can
 .WithSummary("Only available when running the API in Debug mode");
 
 
-app.MapPut("admin/push", async ([FromServices] NotificationsClient client) =>
+app.MapPut("admin/push", ([FromServices] NotificationsClient client) =>
 {
     return client.NotifyAsync(new Notification("Test Notification", "Test notification from the API"));
 }).WithTags("admin")
@@ -243,13 +263,24 @@ public sealed class FileServiceStartupService : BackgroundService
 public sealed class NotificationsClient
 {
     private readonly HttpClient _client;
+    private readonly ILogger<NotificationsClient> _logger;
 
-    public NotificationsClient(HttpClient client)
+    public NotificationsClient(HttpClient client, ILogger<NotificationsClient> logger)
     {
         _client = client;
+        _logger = logger;
     }
 
-    public Task NotifyAsync(Notification notification)
-        => _client.PostAsJsonAsync("/notify", notification);
-
+    public async Task NotifyAsync(Notification notification)
+    {
+        try
+        {
+            await _client.PostAsJsonAsync("/notify", notification);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send puhs notification.");
+            return;
+        }
+    }
 }
