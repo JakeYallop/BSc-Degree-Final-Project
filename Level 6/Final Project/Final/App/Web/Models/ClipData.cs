@@ -20,7 +20,7 @@ public sealed class ClipData
             Detections = clip.Detections.Select(x => new DetectionData()
             {
                 Timestamp = x.Timestamp.Milliseconds,
-                BoundingBox = new[] { x.BoundingBox.X, x.BoundingBox.Y, x.BoundingBox.Z, x.BoundingBox.W },
+                BoundingBox = new[] { x.BoundingBox.X, x.BoundingBox.Y, x.BoundingBox.Width, x.BoundingBox.Height },
             }),
         };
     }

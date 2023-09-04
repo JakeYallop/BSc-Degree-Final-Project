@@ -4,6 +4,7 @@ using System.Numerics;
 using FFMpegCore;
 using FFMpegCore.Enums;
 using FFMpegCore.Pipes;
+using ImageMagick;
 using Web.Entities;
 
 namespace Web;
@@ -21,37 +22,41 @@ public class VideoService
         return await ExtractFrameAtTimeAsync(input, videoDuration / 2);
     }
 
-    public async Task<Stream> ExtractMostSignificantFrameAsync(Stream input, (Vector4 BoundingBox, TimeSpan Timestamp)[] detections)
+    public async Task<Stream> GetBestCroppedFrameAsync(Stream input, (BoundingBox BoundingBox, TimeSpan Timestamp)[] detections)
     {
         Debug.Assert(detections.Length > 0);
-        var bestDetection = detections[0];
-        var largestArea = 0d;
-        foreach (var detection in detections)
+
+        var enumerable = detections
+            .Select(x => (x.Timestamp, x.BoundingBox, x.BoundingBox.GetArea()))
+            .OrderByDescending(x => x.Item3)
+            .AsEnumerable();
+
+        if (detections.Length > 5)
         {
-            var area = detection.BoundingBox.GetAreaWH();
-            if (area > largestArea)
-            {
-                bestDetection = detection;
-                largestArea = area;
-            }
+            enumerable = enumerable.Skip((int)(detections.Length * 0.1));
         }
 
-        return await ExtractFrameAtTimeAsync(input, bestDetection.Timestamp);
+        var best = enumerable.First();
+        var frame = await ExtractFrameAtTimeAsync(input, best.Timestamp);
+        var image = new MagickImage(frame, MagickFormat.Jpeg);
+        var newBox = best.BoundingBox.Grow(30, image.Width, image.Height);
+        image.Crop(new MagickGeometry((int)newBox.X, (int)newBox.Y, (int)newBox.Width, (int)newBox.Height));
+        image.Write($"{Path.GetTempPath()}{Path.DirectorySeparatorChar}{Guid.NewGuid()}.jpg");
+        return new MemoryStream(image.ToByteArray());
     }
 
     private static async Task<Stream> ExtractFrameAtTimeAsync(Stream input, TimeSpan timestamp)
     {
-        var inputPath = $"{Path.GetTempPath()}{Path.PathSeparator}{Guid.NewGuid()}.mp4";
+        var inputPath = $"{Path.GetTempPath()}{Path.DirectorySeparatorChar}{Guid.NewGuid()}.mp4";
         var file = File.OpenWrite(inputPath);
         input.CopyTo(file);
         file.Close();
 
-        var outputPath = $"{Path.GetTempPath()}{Path.PathSeparator}{Guid.NewGuid()}.jpg";
+        var outputPath = $"{Path.GetTempPath()}{Path.DirectorySeparatorChar}{Guid.NewGuid()}.jpg";
         await FFMpegArguments
             .FromFileInput(inputPath, verifyExists: false, args =>
             {
                 args.Seek(timestamp);
-                    //.ForceFormat("h264")
             })
             .OutputToFile(outputPath, overwrite: false, args =>
             {
@@ -61,13 +66,6 @@ public class VideoService
             }).ProcessAsynchronously();
         return File.OpenRead(outputPath);
     }
-}
 
-
-public static class ImageExtensions
-{
-    public static double GetAreaWH(this Vector4 vector)
-    {
-        return vector.W * vector.Z;
-    }
+   
 }

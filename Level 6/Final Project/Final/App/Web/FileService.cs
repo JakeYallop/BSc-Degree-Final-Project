@@ -5,11 +5,24 @@ public sealed class FileService
     {
     }
 
-    public async Task<Guid> StoreFileAsync(byte[] data, string extension, CancellationToken cancellationToken = default)
+    public async Task<Guid> StoreFileAsync(byte[] data, CancellationToken cancellationToken = default)
     {
         var id = Guid.NewGuid();
         var path = $"store/{id}";
         await File.WriteAllBytesAsync(path, data, cancellationToken);
+        return id;
+    }
+
+    public async Task<Guid> StoreFileAsync(Stream data, CancellationToken cancellationToken = default)
+    {
+        await Task.Yield();
+        var id = Guid.NewGuid();
+        var path = $"store/{id}";
+        cancellationToken.ThrowIfCancellationRequested();
+        var s = File.OpenWrite(path);
+        data.CopyTo(s);
+        s.Close();
+        data.Dispose();
         return id;
     }
 

@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Linq.Expressions;
 using System.Numerics;
 using System.Text.Json;
+using System.Threading.Channels;
 using Web;
 using Web.Classification;
 using Web.Entities;
@@ -32,6 +33,9 @@ builder.Services.AddHostedService<FileServiceStartupService>();
 builder.Services.AddSingleton<VideoService>();
 builder.Services.AddSingleton<ImageClassificationService>();
 builder.Services.AddSingleton<IImageClassifierSettings, EfficientNetLite4Settings>(_ => EfficientNetLite4Settings.Create(modelPath: "Classification/efficientnet-lite4-11.onnx", classesPath: "Classification/efficientnet_labels_processed.txt"));
+builder.Services.AddHostedService<ScopedBackgroundService<ImageAnalysisBackgroundService>>();
+builder.Services.AddScoped<ImageAnalysisBackgroundService>();
+builder.Services.AddSingleton<ImageAnalysisChannel>();
 
 builder.Services.AddScoped<ClipHub>();
 builder.Services.AddHttpClient<NotificationsClient>(client =>
@@ -69,55 +73,44 @@ app.MapPost("clips", async (
     IHubContext<ClipHub, IClipHub> hub,
     FileService fileService,
     NotificationsClient client,
-    ImageClassificationService classificationService,
-    VideoService videoService) =>
+    ImageAnalysisChannel channel) =>
 {
     var clip = new Clip
     {
         Id = Guid.NewGuid(),
-        FileId = await fileService.StoreFileAsync(data.Data, ".mp4"),
+        FileId = await fileService.StoreFileAsync(data.Data),
         Name = Guid.NewGuid().ToString(),
         DateRecorded = data.DateRecorded,
         CreatedAt = DateTimeOffset.UtcNow,
         Detections = data.Detections.Select(d => new Detection
         {
             Timestamp = TimeSpan.FromMilliseconds(d.Timestamp),
-            BoundingBox = new Vector4(d.BoundingBox[0], d.BoundingBox[1], d.BoundingBox[2], d.BoundingBox[3]),
+            BoundingBox = new(d.BoundingBox[0], d.BoundingBox[1], d.BoundingBox[2], d.BoundingBox[3]),
         }).ToArray()
     };
 
     db.Add(clip);
-    var classifyTask = ClassifyAsync(fileService, classificationService, videoService, clip);
-    var dbTask = db.SaveChangesAsync();
-    var notifyClientTask = hub.Clients.All.NewClipAdded(clip.Id);
-    Console.WriteLine(clip.DateRecorded.Kind);
-    var pushNotificationTask = client.NotifyAsync(new Notification("New motion detected", $"New motion was detected at {clip.DateRecorded.ToLocalTime()}."));
-   await Task.WhenAll(dbTask, notifyClientTask, pushNotificationTask, classifyTask);
-}).WithTags("clips");
+    await db.SaveChangesAsync();
 
-static async Task ClassifyAsync(FileService fileService, ImageClassificationService classificationService, VideoService videoService, Clip clip)
-{
-    var file = await fileService.GetFileAsync(clip.FileId);
-    var frameToClassify = await videoService.ExtractMostSignificantFrameAsync(file, clip.Detections.Select(x => (x.BoundingBox, x.Timestamp)).ToArray());
-    var ms = new MemoryStream(capacity: (int)frameToClassify.Length);
-    await frameToClassify.CopyToAsync(ms);
-    var classes = await classificationService.ClassifyAsync(ms.ToArray());
-    Console.WriteLine($"Classifier predicted:{Environment.NewLine}{string.Join(Environment.NewLine, classes.Select(x => $"{x.Class} {x.Confidence * 100:F5}%"))}");
-}
+    var analysisTask = channel.WriteAsync(clip.Id);
+    var notifyClientTask = hub.Clients.All.NewClipAdded(clip.Id);
+    var pushNotificationTask = client.NotifyAsync(new Notification("New motion detected", $"New motion was detected at {clip.DateRecorded.ToLocalTime()}."));
+    await Task.WhenAll(notifyClientTask, pushNotificationTask);
+}).WithTags("clips");
 
 app.MapDelete("clips", (Guid id, AppDbContext db, CancellationToken cancellation) =>
 {
     return db.Clips.Where(x => x.Id == id).ExecuteDeleteAsync(cancellation);
 }).WithTags("clips");
 
-app.MapGet("clips", (AppDbContext db, CancellationToken cancellation) =>
+app.MapGet("clips", (AppDbContext db, FileService fileService, CancellationToken cancellation) =>
 {
     return db.Clips.Select(x => new
     {
         x.Id,
         DateRecorded = x.DateRecorded.ToLocalTime(),
         x.Name,
-        Thumbnail = null as byte[],
+        ThumbnailId = x.ImageUsedForClassification
     }).ToListAsync(cancellation);
 }).WithTags("clips");
 
@@ -150,7 +143,7 @@ app.MapGet("clips/{id:guid}", async (Guid id, AppDbContext db, FileService fileS
         Url = path,
         Detections = clip.Detections.Select(x => new DetectionData
         {
-            BoundingBox = new[] { x.BoundingBox.X, x.BoundingBox.Y, x.BoundingBox.Z, x.BoundingBox.W },
+            BoundingBox = new[] { x.BoundingBox.X, x.BoundingBox.Y, x.BoundingBox.Width, x.BoundingBox.Height },
             Timestamp = x.Timestamp.Milliseconds,
         }).ToArray(),
     }
@@ -174,6 +167,25 @@ app.MapGet("clips/{id:guid}/video/{fileId:guid}.mp4", async (Guid id, Guid fileI
     streamTask.Result.CopyTo(s);
 
     return Results.File(s.ToArray(), "video/mp4");
+}).WithTags("clips");
+
+
+app.MapGet("clips/{id:guid}/thumb/{fileId:guid}.jpg", async (Guid id, Guid fileId, AppDbContext db, FileService fileService, CancellationToken cancellation) =>
+{
+    var exists = db.Clips.AnyAsync(x => x.Id == id && x.ImageUsedForClassification == fileId, cancellation);
+    var streamTask = fileService.GetFileAsync(fileId, cancellation);
+    await Task.WhenAll(streamTask, exists);
+    cancellation.ThrowIfCancellationRequested();
+
+    if (!exists.Result)
+    {
+        return Results.NotFound();
+    }
+
+    var s = new MemoryStream();
+    streamTask.Result.CopyTo(s);
+
+    return Results.File(s.ToArray(), "image/jpeg");
 }).WithTags("clips");
 
 app.MapPut("clips/{id:guid}/name", async (Guid id, [FromBody] NameInfo data, AppDbContext db, HttpContext httpContext, IHubContext<ClipHub, IClipHub> hub, CancellationToken cancellationToken) =>
@@ -238,6 +250,7 @@ public interface IClipHub
     Task NewClipAdded(Guid clipId);
 
     Task ClipUpdated(Guid clipId);
+    Task AdditionalTasksCompleted(Guid clipId);
 }
 
 public sealed class ClipHub : Hub<IClipHub>
@@ -279,8 +292,120 @@ public sealed class NotificationsClient
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send puhs notification.");
+            _logger.LogError(ex, "Failed to send push notification.");
             return;
         }
     }
+}
+
+public sealed class ImageAnalysisChannel
+{
+    private static readonly Channel<Guid> Channel = System.Threading.Channels.Channel.CreateUnbounded<Guid>(new UnboundedChannelOptions
+    {
+        SingleReader = true,
+        SingleWriter = false,
+    });
+
+    public ValueTask<Guid> ReadAsync(CancellationToken cancellationToken = default)
+    {
+        return Channel.Reader.ReadAsync(cancellationToken);
+    }
+
+    public ValueTask WriteAsync(Guid clipId, CancellationToken cancellationToken = default)
+    {
+        return Channel.Writer.WriteAsync(clipId, cancellationToken);
+    }
+}
+
+public sealed class ImageAnalysisBackgroundService : IScopedBackgroundService<ImageAnalysisBackgroundService>
+{
+    private readonly ImageAnalysisChannel _channel;
+    private readonly AppDbContext _db;
+    private readonly FileService _fileService;
+    private readonly VideoService _videoService;
+    private readonly ImageClassificationService _classificationService;
+    private readonly IHubContext<ClipHub, IClipHub> _hub;
+    private readonly ILogger<ImageAnalysisBackgroundService> _logger;
+
+    public ImageAnalysisBackgroundService(
+        ImageAnalysisChannel channel,
+        AppDbContext db,
+        FileService fileService,
+        VideoService videoService,
+        ImageClassificationService classificationService,
+        IHubContext<ClipHub, IClipHub> hub,
+        ILogger<ImageAnalysisBackgroundService> logger)
+    {
+        _channel = channel;
+        _db = db;
+        _fileService = fileService;
+        _videoService = videoService;
+        _classificationService = classificationService;
+        _hub = hub;
+        _logger = logger;
+    }
+
+    public async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await Task.Yield();
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                var clipId = await _channel.ReadAsync(stoppingToken);
+                var clip = await _db.Clips
+                    .Where(x => x.Id == clipId)
+                    .Include(x => x.Detections)
+                    .FirstAsync(stoppingToken);
+
+                var file = await _fileService.GetFileAsync(clip.FileId, stoppingToken);
+                var frameToClassify = await _videoService.GetBestCroppedFrameAsync(file, clip.Detections.Select(x => (x.BoundingBox, x.Timestamp)).ToArray());
+                var fileId = await _fileService.StoreFileAsync(frameToClassify, stoppingToken);
+
+                frameToClassify = await _fileService.GetFileAsync(fileId, stoppingToken);
+                var ms = new MemoryStream(capacity: (int)frameToClassify.Length);
+                await frameToClassify.CopyToAsync(ms, stoppingToken);
+                var classes = await _classificationService.ClassifyAsync(ms.ToArray());
+                Console.WriteLine($"Classifier predicted:{Environment.NewLine}{string.Join(Environment.NewLine, classes.Select(x => $"{x.Class} {x.Confidence * 100:F5}%"))}");
+
+                clip.Classifications = classes.Select(c => new Classification
+                {
+                    Label = c.Class,
+                    Confidence = c.Confidence,
+                    CreatedAt = DateTimeOffset.UtcNow
+                }).ToArray();
+                clip.ImageUsedForClassification = fileId;
+                await _db.SaveChangesAsync(stoppingToken);
+                await _hub.Clients.All.AdditionalTasksCompleted(clipId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error classifying clip.");
+            }
+        }
+    }
+}
+
+public sealed class ScopedBackgroundService<T> : BackgroundService where T : IScopedBackgroundService<T>
+{
+    private readonly IServiceScopeFactory _factory;
+
+    public ScopedBackgroundService(IServiceScopeFactory factory)
+    {
+        _factory = factory;
+    }
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            using var scope = _factory.CreateScope();
+            var service = scope.ServiceProvider.GetRequiredService<T>();
+            await service.ExecuteAsync(stoppingToken);
+        }
+    }
+}
+
+public interface IScopedBackgroundService<T> where T : IScopedBackgroundService<T>
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken);
 }
