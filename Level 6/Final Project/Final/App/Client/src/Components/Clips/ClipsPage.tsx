@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ClipsApi, { ClipData, ClipInfoItem } from "../../ClipsApi.ts";
 import ClipList from "./ClipList.tsx";
 import { Box, Stack, StackProps, Typography } from "@mui/material";
@@ -8,6 +8,8 @@ import EditableHeading from "../EditableHeading.tsx";
 import { formatDate } from "../FormattedDate.ts";
 import * as signalR from "@microsoft/signalr";
 import ClipView from "./ClipView.tsx";
+import usePrevious from "../../Hooks/usePrevious.ts";
+import useEventCallback from "../../Hooks/useEventCallback.ts";
 
 const fetchClip = async (selectedClipId: string) => {
 	const response = await ClipsApi.getClip(selectedClipId);
@@ -46,48 +48,38 @@ const ClipsPage = () => {
 		setSelectedClipId(id);
 	};
 
-	const handleClipUpdated = useCallback(
-		async (clipId: string) => {
-			if (clipId == selectedClipId) {
-				const clip = await fetchClip(clipId);
-				const oldClip = clips!.find((c) => c.id == clipId)!;
-				setClip(clip);
-				setClips(
-					[
-						...clips!.filter((c) => c.id != clipId),
-						{ id: clip!.id, dateRecorded: oldClip.dateRecorded, name: clip?.name!, thumbnail: oldClip.thumbnail! },
-					].sort((a, b) => (a.dateRecorded > b.dateRecorded ? 1 : -1))
-				);
-			}
-		},
-		[selectedClipId, clip, clips]
-	);
+	const handleClipUpdated = useEventCallback(async (clipId: string) => {
+		if (clipId == selectedClipId) {
+			const clip = await fetchClip(clipId);
+			const oldClip = clips!.find((c) => c.id == clipId)!;
+			setClip(clip);
+			setClips(
+				[
+					...clips!.filter((c) => c.id != clipId),
+					{ id: clip!.id, dateRecorded: oldClip.dateRecorded, name: clip?.name!, thumbnail: oldClip.thumbnail! },
+				].sort((a, b) => (a.dateRecorded > b.dateRecorded ? 1 : -1))
+			);
+		}
+	});
 
-	const handleClipAdded = useCallback(
-		(_: string) => {
-			ClipsApi.getClip(_)
-				.then((clip) => {
-					return clip.json();
-				})
-				.then((clip) => {
-					const newClips = [
-						...clips!,
-						{
-							id: clip.id,
-							dateRecorded: new Date(clip.dateRecorded),
-							name: clip.name,
-							thumbnail: clip.thumbnail,
-						} as ClipInfoItem,
-					].sort((a, b) => (a.dateRecorded > b.dateRecorded ? 1 : -1));
-					setClips(newClips);
-				});
-
-			ClipsApi.getClips().then((clips) => {
-				setClips(clips);
+	const handleClipAdded = useEventCallback((clipId: string) => {
+		ClipsApi.getClip(clipId)
+			.then((clip) => {
+				return clip.json();
+			})
+			.then((clip) => {
+				const newClips = [
+					...clips!.filter((c) => c.id != clip.id),
+					{
+						id: clip.id,
+						dateRecorded: new Date(clip.dateRecorded),
+						name: clip.name,
+						thumbnail: clip.thumbnail,
+					},
+				].sort((a, b) => (a.dateRecorded > b.dateRecorded ? 1 : -1));
+				setClips(newClips);
 			});
-		},
-		[clips]
-	);
+	});
 
 	useEffect(() => {
 		const connection = new signalR.HubConnectionBuilder()
@@ -105,20 +97,23 @@ const ClipsPage = () => {
 	}, []);
 
 	useEffect(() => {
-		connection?.off("NewClipAdded");
-		connection?.on("NewClipAdded", handleClipAdded);
-		if (connection?.state == signalR.HubConnectionState.Disconnected) {
-			connection?.start();
+		if (connection != null) {
+			connection?.on("NewClipAdded", handleClipAdded);
+			connection?.on("AdditionalTasksCompleted", handleClipAdded);
+			if (connection?.state == signalR.HubConnectionState.Disconnected) {
+				connection?.start();
+			}
 		}
-	}, [handleClipAdded]);
+	}, [connection]);
 
 	useEffect(() => {
-		connection?.off("ClipUpdated");
-		connection?.on("ClipUpdated", handleClipUpdated);
-		if (connection?.state == signalR.HubConnectionState.Disconnected) {
-			connection?.start();
+		if (connection != null) {
+			connection?.on("ClipUpdated", handleClipUpdated);
+			if (connection?.state == signalR.HubConnectionState.Disconnected) {
+				connection?.start();
+			}
 		}
-	}, [handleClipUpdated]);
+	}, [connection]);
 
 	return (
 		<Stack direction="row" spacing={1}>

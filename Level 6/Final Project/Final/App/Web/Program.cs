@@ -257,10 +257,10 @@ public interface IClipHub
 
 public sealed class ClipHub : Hub<IClipHub>
 {
-    public async Task ClipAddedAsync(Guid id)
-    {
-        await Clients.All.NewClipAdded(id);
-    }
+    //public async Task ClipAddedAsync(Guid id)
+    //{
+    //    await Clients.All.NewClipAdded(id);
+    //}
 }
 
 public sealed class FileServiceStartupService : BackgroundService
