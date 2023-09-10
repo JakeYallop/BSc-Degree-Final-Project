@@ -59,6 +59,8 @@ const ClipItem = (props: ClipItemProps) => {
 	const { clip, active, onClick } = props;
 	const theme = useTheme();
 
+	useEffect(() => {}, [clip]);
+
 	return (
 		<ClipItemContainer elevation={0} active={active} onClick={() => onClick && onClick(clip.id)}>
 			<Stack spacing={1} direction="row">

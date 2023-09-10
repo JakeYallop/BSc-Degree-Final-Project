@@ -64,6 +64,8 @@ const LoadableImage = ({
 		setLoaded(true);
 		if (onError) {
 			onError(event);
+		} else {
+			console.error("Error loading image: ", event.currentTarget.src);
 		}
 	};
 

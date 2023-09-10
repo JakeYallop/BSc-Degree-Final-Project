@@ -31,6 +31,7 @@ export interface ClipData {
 		boundinBox: [x: number, y: number, w: number, h: number];
 	};
 	url: string;
+	thumbnail: string | undefined;
 }
 
 const getClip = (id: string) => http.get<ClipData>(u(id));

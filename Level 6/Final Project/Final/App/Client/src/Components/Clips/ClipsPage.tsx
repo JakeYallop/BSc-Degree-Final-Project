@@ -7,6 +7,7 @@ import "vidstack/styles/defaults.css";
 import EditableHeading from "../EditableHeading.tsx";
 import { formatDate } from "../FormattedDate.ts";
 import * as signalR from "@microsoft/signalr";
+import ClipView from "./ClipView.tsx";
 
 const fetchClip = async (selectedClipId: string) => {
 	const response = await ClipsApi.getClip(selectedClipId);
@@ -49,7 +50,7 @@ const ClipsPage = () => {
 		async (clipId: string) => {
 			if (clipId == selectedClipId) {
 				const clip = await fetchClip(clipId);
-				var oldClip = clips!.find((c) => c.id == clipId)!;
+				const oldClip = clips!.find((c) => c.id == clipId)!;
 				setClip(clip);
 				setClips(
 					[
@@ -60,6 +61,32 @@ const ClipsPage = () => {
 			}
 		},
 		[selectedClipId, clip, clips]
+	);
+
+	const handleClipAdded = useCallback(
+		(_: string) => {
+			ClipsApi.getClip(_)
+				.then((clip) => {
+					return clip.json();
+				})
+				.then((clip) => {
+					const newClips = [
+						...clips!,
+						{
+							id: clip.id,
+							dateRecorded: new Date(clip.dateRecorded),
+							name: clip.name,
+							thumbnail: clip.thumbnail,
+						} as ClipInfoItem,
+					].sort((a, b) => (a.dateRecorded > b.dateRecorded ? 1 : -1));
+					setClips(newClips);
+				});
+
+			ClipsApi.getClips().then((clips) => {
+				setClips(clips);
+			});
+		},
+		[clips]
 	);
 
 	useEffect(() => {
@@ -73,14 +100,17 @@ const ClipsPage = () => {
 			.configureLogging(signalR.LogLevel.Information)
 			.build();
 
-		connection.on("NewClipAdded", (_: string) => {
-			ClipsApi.getClips().then((clips) => {
-				setClips(clips);
-			});
-		});
 		connection.start();
 		setConnection(connection);
 	}, []);
+
+	useEffect(() => {
+		connection?.off("NewClipAdded");
+		connection?.on("NewClipAdded", handleClipAdded);
+		if (connection?.state == signalR.HubConnectionState.Disconnected) {
+			connection?.start();
+		}
+	}, [handleClipAdded]);
 
 	useEffect(() => {
 		connection?.off("ClipUpdated");
@@ -94,8 +124,10 @@ const ClipsPage = () => {
 		<Stack direction="row" spacing={1}>
 			<ClipList minWidth="300px" clips={clips} onClipSelected={handleClipSelected}></ClipList>
 			{clip && (
-				<Box width="100%">
-					<ClipView clip={clip!}></ClipView>
+				<Box width="100%" position="relative">
+					<Box width="100%" position="sticky" top="0">
+						<ClipView clip={clip!}></ClipView>
+					</Box>
 				</Box>
 			)}
 		</Stack>
@@ -103,39 +135,3 @@ const ClipsPage = () => {
 };
 
 export default ClipsPage;
-
-interface ClipViewProps extends StackProps {
-	clip: ClipData;
-}
-
-const ClipView = (props: ClipViewProps) => {
-	const { clip, ...rest } = props;
-	const handleSave = async (s: string) => {
-		await ClipsApi.updateName(clip.id, s);
-	};
-
-	return (
-		<Stack {...rest} spacing={2}>
-			<VideoPlayer clip={clip} />
-			<EditableHeading heading={clip.name} prefix="Clip Name" onSave={handleSave} />
-			<Typography variant="h6">Date Recorded: {formatDate(clip.dateRecorded)}</Typography>
-		</Stack>
-	);
-};
-
-interface VideoPlayerProps {
-	clip: ClipData;
-}
-const VideoPlayer = (props: VideoPlayerProps) => {
-	const {
-		clip: { url },
-	} = props;
-
-	return (
-		<Box maxWidth="80%" maxHeight="50%">
-			<MediaPlayer title="Video" src={url} controls>
-				<MediaOutlet />
-			</MediaPlayer>
-		</Box>
-	);
-};

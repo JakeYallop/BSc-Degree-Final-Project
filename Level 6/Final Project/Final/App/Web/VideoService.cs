@@ -66,6 +66,4 @@ public class VideoService
             }).ProcessAsynchronously();
         return File.OpenRead(outputPath);
     }
-
-   
 }

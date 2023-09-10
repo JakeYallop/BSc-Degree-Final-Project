@@ -8,6 +8,7 @@ public sealed class ClipData
     public DateTime DateRecorded { get; init; }
     public string Url { get; init; } = null!;
     public IEnumerable<DetectionData> Detections { get; init; } = Array.Empty<DetectionData>();
+    public string? Thumbnail { get; init; }
 
     public static ClipData MapFrom(Clip clip, string baseUrl)
     {
@@ -22,6 +23,7 @@ public sealed class ClipData
                 Timestamp = x.Timestamp.Milliseconds,
                 BoundingBox = new[] { x.BoundingBox.X, x.BoundingBox.Y, x.BoundingBox.Width, x.BoundingBox.Height },
             }),
+            Thumbnail = ThumbnailUrlHelper.GetUrl(baseUrl, clip.Id, clip.ImageUsedForClassification),
         };
     }
 }

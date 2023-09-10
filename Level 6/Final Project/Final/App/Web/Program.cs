@@ -103,14 +103,14 @@ app.MapDelete("clips", (Guid id, AppDbContext db, CancellationToken cancellation
     return db.Clips.Where(x => x.Id == id).ExecuteDeleteAsync(cancellation);
 }).WithTags("clips");
 
-app.MapGet("clips", (AppDbContext db, FileService fileService, CancellationToken cancellation) =>
+app.MapGet("clips", (HttpContext httpContext, AppDbContext db, FileService fileService, CancellationToken cancellation) =>
 {
     return db.Clips.Select(x => new
     {
         x.Id,
         DateRecorded = x.DateRecorded.ToLocalTime(),
         x.Name,
-        ThumbnailId = x.ImageUsedForClassification
+        Thumbnail = ThumbnailUrlHelper.GetUrl(httpContext.BaseUrl(), x.Id, x.ImageUsedForClassification)
     }).ToListAsync(cancellation);
 }).WithTags("clips");
 
@@ -126,7 +126,8 @@ app.MapGet("clips/{id:guid}", async (Guid id, AppDbContext db, FileService fileS
         {
             d.Timestamp,
             d.BoundingBox,
-        }).ToArray()
+        }).ToArray(),
+        ThumbnailId = x.ImageUsedForClassification
     }).FirstOrDefaultAsync(x => x.Id == id, cancellationToken: cancellation);
 
     if (clip is null)
@@ -146,6 +147,7 @@ app.MapGet("clips/{id:guid}", async (Guid id, AppDbContext db, FileService fileS
             BoundingBox = new[] { x.BoundingBox.X, x.BoundingBox.Y, x.BoundingBox.Width, x.BoundingBox.Height },
             Timestamp = x.Timestamp.Milliseconds,
         }).ToArray(),
+        Thumbnail = ThumbnailUrlHelper.GetUrl(httpContext.BaseUrl(), id, clip.ThumbnailId),
     }
    , JsonOptions.Default);
 
@@ -408,4 +410,10 @@ public sealed class ScopedBackgroundService<T> : BackgroundService where T : ISc
 public interface IScopedBackgroundService<T> where T : IScopedBackgroundService<T>
 {
     public Task ExecuteAsync(CancellationToken cancellationToken);
+}
+
+public static class ThumbnailUrlHelper
+{
+    public static string? GetUrl(string baseUrl, Guid clipId, Guid? thumbnailId)
+        => thumbnailId is null ? null : $"{baseUrl}/clips/{clipId}/thumb/{thumbnailId}.jpg";
 }
