@@ -2,13 +2,15 @@ import { styled, Box, BoxProps } from "@mui/material";
 import LoadableImage, { LoadableImageProps } from "./LoadableImage.tsx";
 import { Image } from "@mui/icons-material";
 
-const ImageContainer = styled(Box)(({ theme }) => ({
-	minWidth: "3rem",
-	minHeight: "3rem",
-	maxWidth: "3rem",
-	maxHeight: "3rem",
-	display: "flex",
-}));
+const ImageContainer = styled(Box, { shouldForwardProp: (prop) => prop !== "thumbWidth" })<{ thumbWidth: number }>(
+	({ theme, thumbWidth }) => ({
+		minWidth: `${thumbWidth}rem`,
+		minHeight: `${thumbWidth}rem`,
+		maxWidth: `${thumbWidth}rem`,
+		maxHeight: `${thumbWidth}rem`,
+		display: "flex",
+	})
+);
 
 const StyledImage = styled(LoadableImage)(({ theme }) => ({
 	width: "100%",
@@ -21,7 +23,9 @@ const StyledFallback = styled(Image)(({ theme }) => ({
 	objectFit: "cover",
 }));
 
-interface ThumbnailProps extends BoxProps {}
+interface ThumbnailProps extends BoxProps {
+	thumbWidth?: number;
+}
 
 const Thumbnail = ({ ...otherProps }: ThumbnailProps & Omit<LoadableImageProps, keyof BoxProps>) => {
 	const {
@@ -33,10 +37,11 @@ const Thumbnail = ({ ...otherProps }: ThumbnailProps & Omit<LoadableImageProps, 
 		src,
 		onLoad,
 		onError,
+		thumbWidth,
 		...boxProps
 	} = otherProps;
 	return (
-		<ImageContainer {...boxProps}>
+		<ImageContainer {...boxProps} thumbWidth={thumbWidth ?? 3}>
 			<StyledImage
 				fallbackComponent={fallbackComponent || <StyledFallback />}
 				loadingSpinnerShowDelay={loadingSpinnerShowDelay}

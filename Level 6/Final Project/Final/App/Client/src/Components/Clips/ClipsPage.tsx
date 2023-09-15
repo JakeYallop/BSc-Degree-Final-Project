@@ -1,14 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import ClipsApi, { ClipData, ClipInfoItem } from "../../ClipsApi.ts";
 import ClipList from "./ClipList.tsx";
-import { Box, Stack, StackProps, Typography } from "@mui/material";
-import { MediaPlayer, MediaOutlet } from "@vidstack/react";
+import { Box, Stack } from "@mui/material";
 import "vidstack/styles/defaults.css";
-import EditableHeading from "../EditableHeading.tsx";
-import { formatDate } from "../FormattedDate.ts";
 import * as signalR from "@microsoft/signalr";
 import ClipView from "./ClipView.tsx";
-import usePrevious from "../../Hooks/usePrevious.ts";
 import useEventCallback from "../../Hooks/useEventCallback.ts";
 
 const fetchClip = async (selectedClipId: string) => {

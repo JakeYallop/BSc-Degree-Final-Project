@@ -9,6 +9,7 @@ public sealed class ClipData
     public string Url { get; init; } = null!;
     public IEnumerable<DetectionData> Detections { get; init; } = Array.Empty<DetectionData>();
     public string? Thumbnail { get; init; }
+    public IEnumerable<ClassificationData>? Classifications { get; init; }
 
     public static ClipData MapFrom(Clip clip, string baseUrl)
     {
@@ -24,6 +25,11 @@ public sealed class ClipData
                 BoundingBox = new[] { x.BoundingBox.X, x.BoundingBox.Y, x.BoundingBox.Width, x.BoundingBox.Height },
             }),
             Thumbnail = ThumbnailUrlHelper.GetUrl(baseUrl, clip.Id, clip.ImageUsedForClassification),
+            Classifications = clip.Classifications.Select(x => new ClassificationData()
+            {
+                Confidence = x.Confidence,
+                Label = x.Label,
+            }),
         };
     }
 }

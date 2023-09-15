@@ -1,3 +1,4 @@
+import { ClassificationLabel } from "./Components/formatClassificationLabel.ts";
 import getHttpClient from "./getHttpClient.ts";
 
 const ApiBaseUrl = `${import.meta.env.VITE_API_BASE_URL}/clips`;
@@ -11,6 +12,7 @@ export interface ClipInfoItem {
 	dateRecorded: Date;
 	name: string;
 	thumbnail: string | undefined;
+	classification?: ClassificationLabel;
 }
 
 const getClips = async () => {
@@ -32,6 +34,7 @@ export interface ClipData {
 	};
 	url: string;
 	thumbnail: string | undefined;
+	classifications?: ClassificationLabel[];
 }
 
 const getClip = (id: string) => http.get<ClipData>(u(id));

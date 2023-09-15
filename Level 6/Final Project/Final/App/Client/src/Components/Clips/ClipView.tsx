@@ -1,8 +1,8 @@
 import { StackProps, Stack, Typography } from "@mui/material";
 import ClipsApi, { ClipData } from "../../ClipsApi.ts";
 import EditableHeading from "../EditableHeading.tsx";
-import { formatDate } from "../FormattedDate.ts";
-import VideoPlayer from "./VidepPlayer.tsx";
+import { formatDate } from "../formatDate.ts";
+import VideoPlayer from "./VideoPlayer.tsx";
 
 interface ClipViewProps extends StackProps {
 	clip: ClipData;

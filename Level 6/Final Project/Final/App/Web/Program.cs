@@ -12,6 +12,7 @@ using Web;
 using Web.Classification;
 using Web.Entities;
 using Web.Models;
+using Web.Routes;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -44,10 +45,14 @@ builder.Services.AddHttpClient<NotificationsClient>(client =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddOpenApiDocument(options =>
+builder.Services.AddSwaggerGen(options =>
 {
-    options.Title = "Camera Motion Detection API";
+    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo()
+    {
+        Title = "Camera Motion Detection API",
+    });
 });
+
 builder.Services.AddCors();
 
 var app = builder.Build();
@@ -59,174 +64,28 @@ app.UseCors(policy =>
         .AllowAnyMethod();
 });
 app.UseHttpsRedirection();
-app.UseOpenApi(configure =>
+
+app.UseSwagger();
+app.UseSwaggerUI(options =>
 {
+    options.DocumentTitle = "Camera Motion Detection API";
+    options.ConfigObject.DocExpansion = Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None;
 });
-app.UseSwaggerUi3(configure =>
-{
-    configure.DocumentTitle = "Camera Motion Detection API";
-});
 
-app.MapPost("clips", async (
-    ClipInfo data,
-    AppDbContext db,
-    IHubContext<ClipHub, IClipHub> hub,
-    FileService fileService,
-    NotificationsClient client,
-    ImageAnalysisChannel channel) =>
-{
-    var clip = new Clip
-    {
-        Id = Guid.NewGuid(),
-        FileId = await fileService.StoreFileAsync(data.Data),
-        Name = Guid.NewGuid().ToString(),
-        DateRecorded = data.DateRecorded,
-        CreatedAt = DateTimeOffset.UtcNow,
-        Detections = data.Detections.Select(d => new Detection
-        {
-            Timestamp = TimeSpan.FromMilliseconds(d.Timestamp),
-            BoundingBox = new(d.BoundingBox[0], d.BoundingBox[1], d.BoundingBox[2], d.BoundingBox[3]),
-        }).ToArray()
-    };
-
-    db.Add(clip);
-    await db.SaveChangesAsync();
-
-    var analysisTask = channel.WriteAsync(clip.Id);
-    var notifyClientTask = hub.Clients.All.NewClipAdded(clip.Id);
-    var pushNotificationTask = client.NotifyAsync(new Notification("New motion detected", $"New motion was detected at {clip.DateRecorded.ToLocalTime()}."));
-    await Task.WhenAll(notifyClientTask, pushNotificationTask);
-}).WithTags("clips");
-
-app.MapDelete("clips", (Guid id, AppDbContext db, CancellationToken cancellation) =>
-{
-    return db.Clips.Where(x => x.Id == id).ExecuteDeleteAsync(cancellation);
-}).WithTags("clips");
-
-app.MapGet("clips", (HttpContext httpContext, AppDbContext db, FileService fileService, CancellationToken cancellation) =>
-{
-    return db.Clips.Select(x => new
-    {
-        x.Id,
-        DateRecorded = x.DateRecorded.ToLocalTime(),
-        x.Name,
-        Thumbnail = ThumbnailUrlHelper.GetUrl(httpContext.BaseUrl(), x.Id, x.ImageUsedForClassification)
-    }).ToListAsync(cancellation);
-}).WithTags("clips");
-
-app.MapGet("clips/{id:guid}", async (Guid id, AppDbContext db, FileService fileService, HttpContext httpContext, CancellationToken cancellation) =>
-{
-    var clip = await db.Clips.Select(x => new
-    {
-        x.Id,
-        x.Name,
-        DateRecorded = x.DateRecorded.ToLocalTime(),
-        x.FileId,
-        Detections = x.Detections.Select(d => new
-        {
-            d.Timestamp,
-            d.BoundingBox,
-        }).ToArray(),
-        ThumbnailId = x.ImageUsedForClassification
-    }).FirstOrDefaultAsync(x => x.Id == id, cancellationToken: cancellation);
-
-    if (clip is null)
-    {
-        return Results.NotFound();
-    }
-
-    var path = $"{httpContext.BaseUrl()}/clips/{id}/video/{clip.FileId}.mp4";
-    return Results.Json(new ClipData()
-    {
-        DateRecorded = clip.DateRecorded,
-        Id = clip.Id,
-        Name = clip.Name,
-        Url = path,
-        Detections = clip.Detections.Select(x => new DetectionData
-        {
-            BoundingBox = new[] { x.BoundingBox.X, x.BoundingBox.Y, x.BoundingBox.Width, x.BoundingBox.Height },
-            Timestamp = x.Timestamp.Milliseconds,
-        }).ToArray(),
-        Thumbnail = ThumbnailUrlHelper.GetUrl(httpContext.BaseUrl(), id, clip.ThumbnailId),
-    }
-   , JsonOptions.Default);
-
-}).WithTags("clips");
-
-app.MapGet("clips/{id:guid}/video/{fileId:guid}.mp4", async (Guid id, Guid fileId, AppDbContext db, FileService fileService, CancellationToken cancellation) =>
-{
-    var exists = db.Clips.AnyAsync(x => x.Id == id && x.FileId == fileId, cancellation);
-    var streamTask = fileService.GetFileAsync(fileId, cancellation);
-    await Task.WhenAll(streamTask, exists);
-    cancellation.ThrowIfCancellationRequested();
-
-    if (!exists.Result)
-    {
-        return Results.NotFound();
-    }
-
-    var s = new MemoryStream();
-    streamTask.Result.CopyTo(s);
-
-    return Results.File(s.ToArray(), "video/mp4");
-}).WithTags("clips");
-
-
-app.MapGet("clips/{id:guid}/thumb/{fileId:guid}.jpg", async (Guid id, Guid fileId, AppDbContext db, FileService fileService, CancellationToken cancellation) =>
-{
-    var exists = db.Clips.AnyAsync(x => x.Id == id && x.ImageUsedForClassification == fileId, cancellation);
-    var streamTask = fileService.GetFileAsync(fileId, cancellation);
-    await Task.WhenAll(streamTask, exists);
-    cancellation.ThrowIfCancellationRequested();
-
-    if (!exists.Result)
-    {
-        return Results.NotFound();
-    }
-
-    var s = new MemoryStream();
-    streamTask.Result.CopyTo(s);
-
-    return Results.File(s.ToArray(), "image/jpeg");
-}).WithTags("clips");
-
-app.MapPut("clips/{id:guid}/name", async (Guid id, [FromBody] NameInfo data, AppDbContext db, HttpContext httpContext, IHubContext<ClipHub, IClipHub> hub, CancellationToken cancellationToken) =>
-{
-    var clip = await db.Clips.FirstAsync(x => x.Id == id, cancellationToken);
-    clip.Name = data.Name;
-    clip.Update();
-    await db.SaveChangesAsync(cancellationToken);
-
-    await hub.Clients.All.ClipUpdated(id);
-
-}).WithTags("clips");
+app.MapGroup("/clips")
+    .MapClipsApiEndpoints()
+    .WithTags("Clips")
+    .WithOpenApi();
 
 #if DEBUG
-app.MapPut("admin/clearall", async (AppDbContext db, ILoggerFactory factory, CancellationToken cancellation) =>
-{
-    var logger = factory.CreateLogger("AdminApi");
-    await db.Database.EnsureDeletedAsync(cancellation);
-    await db.Database.EnsureCreatedAsync(cancellation);
-    try
-    {
-        Directory.Delete("store", true);
-        Directory.CreateDirectory("store");
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error clearing down clips directory");
-    }
-}).WithTags("admin")
-.WithDescription("Clear and delete all resources")
-.WithSummary("Only available when running the API in Debug mode");
 
+app.MapGroup("/admin")
+    .MapAdminApiEndpoints()
+    .WithTags("Admin")
+    .WithDescription("A collection of debug/administration APIs. Only available when running the API in Debug mode")
+    .WithSummary("Test Description")
+    .WithOpenApi();
 
-app.MapPut("admin/push", ([FromServices] NotificationsClient client) =>
-{
-    return client.NotifyAsync(new Notification("Test Notification", "Test notification from the API"));
-}).WithTags("admin")
-.WithDescription("Clear and delete all resources")
-.WithSummary("Only available when running the API in Debug mode");;
 #endif
 
 app.MapHub<ClipHub>("/clipHub");
