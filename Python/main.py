@@ -5,7 +5,7 @@ from pathlib import Path
 
 import cv2
 
-from clip_manager import ClipManager
+import clip_manager
 from capture import capture
 
 
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     if not out_dir.exists():
         os.mkdir(out_dir)
 
-    ClipManager.start_processing(queue, out_dir)
+    clip_manager.start_processing(queue, out_dir)
     capture(video, queue)
     video = cv2.VideoCapture(
         deviceOrPath)
