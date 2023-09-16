@@ -11,7 +11,7 @@ const VideoPlayer = (props: VideoPlayerProps) => {
 	} = props;
 
 	return (
-		<Box maxWidth="80%" maxHeight="50%">
+		<Box maxHeight="50%">
 			<MediaPlayer title="Video" src={url} controls>
 				<MediaOutlet />
 			</MediaPlayer>

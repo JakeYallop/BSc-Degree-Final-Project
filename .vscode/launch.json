@@ -1,0 +1,21 @@
+{
+	// Use IntelliSense to learn about possible attributes.
+	// Hover to view descriptions of existing attributes.
+	// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Python: Run for short video",
+			"type": "python",
+			"request": "launch",
+			"cwd": "${workspaceFolder}/Python",
+			"program": "${workspaceFolder}/Python/capture.py",
+			"console": "integratedTerminal",
+			"args": ["./Entrance Camera - 4-24-2023, 4.17.54am cat.mp4"],
+			"justMyCode": true,
+			"env": {
+				"API_BASE_URL": "https://localhost:7268"
+			}
+		}
+	]
+}

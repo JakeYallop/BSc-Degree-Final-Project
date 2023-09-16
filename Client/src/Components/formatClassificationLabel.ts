@@ -17,12 +17,15 @@ export default function formatClassificationLabel(label: ClassificationLabel | n
 	return label.label;
 }
 
-export function formatClassificationWithConfidence(label: ClassificationLabel | null | undefined) {
+export function formatClassificationWithConfidence(
+	label: ClassificationLabel | null | undefined,
+	alwaysDisplay?: boolean
+) {
 	if (!label) {
 		return "Unknown";
 	}
 
-	if (label.confidence < 0.75) {
+	if (label.confidence < 0.75 && !alwaysDisplay) {
 		return "Unknown";
 	}
 

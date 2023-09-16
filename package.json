@@ -5,18 +5,21 @@
 	"scripts": {
 		"setup:keys": "vite-node ./scripts/generate-vapid-keys.ts",
 		"setup:urls": "vite-node ./scripts/write-default-service-paths.ts",
-		"dev": "pnpm run push && pnpm run client",
 		"push": "pnpm run -F pushnotifications main",
 		"client": "pnpm run -F client dev",
+		"web:run": "dotnet run -c Debug --project ./Web/Web.csproj --launch-profile https",
+		"web:watch": "dotnet watch --project ./Web/Web.csproj --launch-profile https",
+		"web": "echo \"Once the build is complete, view the generated swagger page by navigating to the url printed to console after 'Now listening on: <url>'\" && pnpm run web:run",
 		"setup-defaults": "pnpm run setup:keys && pnpm run setup:urls"
 	},
 	"defaultUrls": {
 		"pushNotifications": "http://localhost:3000",
 		"client": "http://localhost:5173",
-		"api": "http://localhost:7268"
+		"api": "https://localhost:7268"
 	},
 	"dependencies": {
 		"dotenv": "^16.3.1",
+		"opener": "^1.5.2",
 		"vite-node": "^0.34.2",
 		"web-push": "^3.6.4"
 	},

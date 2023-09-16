@@ -1,5 +1,5 @@
 import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
-import { BrowserRouter, Route, Routes, redirect } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, redirect, useNavigate } from "react-router-dom";
 import DefaultLayout from "./Components/Layout/DefaultLayout.tsx";
 import ClipsPage from "./Components/Clips/ClipsPage.tsx";
 
@@ -19,27 +19,19 @@ const theme = createTheme({
 function App() {
 	return (
 		<ThemeProvider theme={theme}>
-			<BrowserRouter>
-				<CssBaseline>
+			<CssBaseline>
+				<BrowserRouter>
 					<Routes>
 						<Route path="/" element={<DefaultLayout />}>
 							<Route path="/clips" element={<ClipsPage />} />
+							<Route path="/" element={<Navigate to="/clips" replace />} />
 						</Route>
-						<Route path="*" element={<Redirect path="/clips" />} />
+						<Route path="/" element={<Navigate to="/clips" replace />} />
 					</Routes>
-				</CssBaseline>
-			</BrowserRouter>
+				</BrowserRouter>
+			</CssBaseline>
 		</ThemeProvider>
 	);
 }
 
 export default App;
-
-interface RedirectProps {
-	path: string;
-}
-const Redirect = (props: RedirectProps) => {
-	const { path } = props;
-	redirect(path);
-	return <></>;
-};

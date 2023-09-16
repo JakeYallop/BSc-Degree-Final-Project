@@ -1,5 +1,6 @@
 import argparse
 import multiprocessing
+import os
 from pathlib import Path
 import time
 import traceback
@@ -203,8 +204,12 @@ if __name__ == "__main__":
         exit(1)
 
     queue = multiprocessing.Queue()
-    while True:
-        clip_manager.start_processing(queue, Path("./clips"))
-        capture(video, queue)
-        video = cv2.VideoCapture(
-            deviceOrPath)
+
+    out_dir = Path("./clips")
+    if not out_dir.exists():
+        os.mkdir(out_dir)
+
+    clip_manager.start_processing(queue, out_dir)
+    capture(video, queue)
+    video = cv2.VideoCapture(
+        deviceOrPath)

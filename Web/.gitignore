@@ -1,2 +1,5 @@
 /store
+
+#sqlite files
 *.db
+*.db-*

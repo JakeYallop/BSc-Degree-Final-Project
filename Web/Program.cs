@@ -70,6 +70,8 @@ app.UseSwaggerUI(options =>
 {
     options.DocumentTitle = "Camera Motion Detection API";
     options.ConfigObject.DocExpansion = Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None;
+    options.RoutePrefix = "";
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Camera Motion Detection API v1");
 });
 
 app.MapGroup("/clips")
@@ -87,6 +89,14 @@ app.MapGroup("/admin")
     .WithOpenApi();
 
 #endif
+
+
+
+//app.MapGet("", (context) =>
+//{
+//    context.Response.Redirect("/swagger/index.html");
+//    return Task.CompletedTask;
+//});
 
 app.MapHub<ClipHub>("/clipHub");
 

@@ -14,15 +14,28 @@ The source code for my final project. The project template was the Camera Motion
 ## Install dependencies
 Firstly, install required dependencies:
 
+Node
 ```
 pnpm install
 ```
 
+.NET
 ```
 dotnet restore
 ```
 
-TODO Python reqs trim requirements.txt first
+Python
+
+Create a new virtual environment:
+```
+python -m venv .venv
+.venv/Scripts/activate
+```
+
+Install dependencies
+```
+pip install -r Python/requirements.txt
+```
 
 ## Generate VAPID (**V**oluntary **A**pplication **S**erver **Id**entity) keys for push notifications
 
@@ -40,7 +53,6 @@ VAPID keys successfully generated and written to .env and .env.local files.
 ```
 
 ## Setup local settings
-
 ```
 pnpm run setup-defaults
 ```
@@ -49,20 +61,37 @@ This step generates VAPID (**V**oluntary **A**pplication **S**erver **Id**entity
 
 The NotificationsBaseUrl is already hardcoded in the appsettings.Development.json file, this is unaffected by the setup script.
 
-Client:
+Client (.env.local file):
 * VITE_API_BASE_URL - the base URL for the Web service
 * VITE_PUSH_SERVER_BASE_URL - the base URL for the PushNotifications service
 
-Web:
+Web (appsettings.Development.json file):
 * NotificationsBaseUrl - the base URL for the PushNotifications service
 
-PushNotifications:
+PushNotifications (.env.local file):
 * VITE_CLIENT_URL - the base URL for the Client service
 
-Python:
-* API_BASE_URL - the base URL for the Web service
+Python (environment variables):
+* API_BASE_URL - the base URL for the Web service - this is passed to the executing python script using an environment variable.
 
 ## Run the services
 
+### Web
+```
+pnpm run web
+```
+Make sure to view the swagger page!
+If running from Visual Studio, use the https launch profile.
 
+### Push notifications
+
+```
+pnpm run push
+```
+
+### Client
+
+```
+pnpm run client
+```
 
