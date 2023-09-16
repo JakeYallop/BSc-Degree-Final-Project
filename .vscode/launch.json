@@ -9,9 +9,9 @@
 			"type": "python",
 			"request": "launch",
 			"cwd": "${workspaceFolder}/Python",
-			"program": "${workspaceFolder}/Python/capture.py",
+			"program": "${workspaceFolder}/Python/main.py",
 			"console": "integratedTerminal",
-			"args": ["./Entrance Camera - 4-24-2023, 4.17.54am cat.mp4"],
+			"args": ["-f ./Entrance Camera - 4-24-2023, 4.17.54am cat.mp4"],
 			"justMyCode": true,
 			"env": {
 				"API_BASE_URL": "https://localhost:7268"

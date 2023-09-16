@@ -95,3 +95,14 @@ pnpm run push
 pnpm run client
 ```
 
+## Running the object detector/clip creator
+
+* Ensure that API_BASE_URL is set to the URL of the Web service. Without this set, clips will not be uploaded.
+* Execute `main.py`, passing in configuration as required. Use `-h` to see possible options.
+
+The launch.json file in this repository runs main.py with a test clip (If you are using VSCode, you see the profile in Run and Debug).
+
+With `API_BASE_URL` set up, this command runs from the "./Python" directory.
+```
+main.py -f "./Entrance Camera - 4-24-2023, 4.17.54am cat.mp4"
+```
