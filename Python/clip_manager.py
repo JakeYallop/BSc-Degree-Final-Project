@@ -28,9 +28,8 @@ class FrameInfo():
 
 
 class ClipsApi():
-    def __init__(self) -> None:
-        url = os.environ["API_BASE_URL"]
-        self.host = url
+    def __init__(self, host) -> None:
+        self.host = host
         self.session = requests.Session()
         self.session.verify = False
         pass
@@ -63,7 +62,7 @@ class ClipsApi():
 
 
 class Clip():
-    def __init__(self, api: ClipsApi, fps: float, output_size: tuple[int, int]) -> None:
+    def __init__(self, api: ClipsApi | None, fps: float, output_size: tuple[int, int]) -> None:
         self.frames: list[FrameInfo] = []
         self.fps = fps
         self.output_size = output_size
@@ -92,9 +91,12 @@ class Clip():
 
     def _onComplete(self, path: Path, output_path: Path):
         print(f"Saved to {output_path}")
-        # TODO: Record recorded date
-        self.api.add_clip(datetime.datetime.utcnow(),
-                          output_path, self.fps, self.frames)
+        if (self.api is not None):
+            self.api.add_clip(datetime.datetime.utcnow(),
+                              output_path, self.fps, self.frames)
+        else:
+            print(
+                "API_BASE_URL not specified in environment variable, clip will not be uploaded")
 
         print(f"Removing original {path}")
         os.remove(path)
@@ -122,7 +124,7 @@ RegionsList = list[tuple[tuple[float, float, float, float], np.ndarray]]
 
 
 class ClipManager():
-    def __init__(self, clipsApi: ClipsApi, output_size: tuple[int, int], fps: float, clip_duration) -> None:
+    def __init__(self, clipsApi: ClipsApi | None, output_size: tuple[int, int], fps: float, clip_duration) -> None:
         self._match_started = False
         self.current_clip: Optional[Clip]
         self.fps: float = fps
@@ -197,8 +199,15 @@ class ClipManager():
                         processed_first_message = True
                         output_size, fps = cast(
                             tuple[tuple[int, int], int], data)
+                        host = os.getenv("API_BASE_URL")
+                        api: ClipsApi | None = None
+                        if host is not None:
+                            api = ClipsApi(host)
+                        else:
+                            print(
+                                "API_BASE_URL not specified in environment variable, clips will not be uploaded to the API")
                         clips = ClipManager(
-                            ClipsApi(), output_size, fps, CLIP_DURATION)
+                            api, output_size, fps, CLIP_DURATION)
                     else:
                         data = cast(tuple[Mat, RegionsList], data)
                         frame_count += 1

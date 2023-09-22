@@ -11,11 +11,10 @@ from capture import capture
 
 if __name__ == "__main__":
     print("Ensure API_BASE_URL is set as an environment variable to make sure that clips are exported to the API. API_BASE_URL should be the URL to the Web project (the web API).")
-
     import sys
     parser = argparse.ArgumentParser(description="camera detection")
     parser.add_argument("-d", "--device", type=int,
-                        help="camera device")
+                        help="capture device")
     parser.add_argument("-f", "--file", type=str,
                         help="Path to video file, useful for testing purposes")
     args = parser.parse_args(sys.argv[1:])
@@ -30,14 +29,11 @@ if __name__ == "__main__":
         print("Error: Only one of filepath or device can be specified")
         exit(1)
 
-    deviceOrPath = ""
+    video: cv2.VideoCapture = None  # type: ignore
     if filepath is not None:
-        deviceOrPath = str(Path(filepath).resolve())
+        video = cv2.VideoCapture(str(Path(filepath).resolve()))
     if device is not None:
-        deviceOrPath = device
-
-    video = cv2.VideoCapture(
-        deviceOrPath)
+        video = cv2.VideoCapture(int(device))
 
     if not video.isOpened():
         print("Could not open video device or file.")
@@ -51,5 +47,3 @@ if __name__ == "__main__":
 
     clip_manager.start_processing(queue, out_dir)
     capture(video, queue)
-    video = cv2.VideoCapture(
-        deviceOrPath)

@@ -2,6 +2,11 @@ declare var self: ServiceWorkerGlobalScope;
 export {};
 
 self.addEventListener("push", (event: PushEvent) => {
+	const permission = Notification.permission;
+	if (permission != "granted") {
+		return;
+	}
+
 	const data = event.data?.json();
 	console.log("New notification", data);
 

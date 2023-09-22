@@ -16,6 +16,19 @@
 			"env": {
 				"API_BASE_URL": "https://localhost:7268"
 			}
+		},
+		{
+			"name": "Python: Default Capture Device",
+			"type": "python",
+			"request": "launch",
+			"cwd": "${workspaceFolder}/Python",
+			"program": "${workspaceFolder}/Python/main.py",
+			"console": "integratedTerminal",
+			"args": ["-d 0"],
+			"justMyCode": true,
+			"env": {
+				"API_BASE_URL": "https://localhost:7268"
+			}
 		}
 	]
 }

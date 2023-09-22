@@ -106,3 +106,37 @@ With `API_BASE_URL` set up, this command runs from the "./Python" directory.
 ```
 main.py -f "./Entrance Camera - 4-24-2023, 4.17.54am cat.mp4"
 ```
+
+## Accessing the localhost client on an android mobile device
+
+### Prerequisites
+* USB debugging must be enabled
+
+### Allow HTTPS requests
+Configure your web browser on the mobile device to allow insecure requests on localhost. On Chrome:
+chrome://flags/#allow-insecure-localhost
+
+or, install a valid certificate on the mobile device and configure the Client project to use it by editing the `mkcert` plugin.
+
+### Port forward to device
+
+Ensuring the mobile device is connected via USB and debugging access has been granted, port forward localhost5173 to 5173.
+
+This is done inside the desktop web browser and will be browser specific. In Chrome: Go to chrome://inspect/#devices and click "Port forwarding".
+
+
+## Troubleshooting
+
+### Error when starting python script
+```
+python main.py -d 0
+```
+
+Can sometimes fail with an error:
+```
+[ WARN:0@1.026] global cap_msmf.cpp:471 `anonymous-namespace'::SourceReaderCB::OnReadSample videoio(MSMF): OnReadSample() is called with error status: -1072875772
+[ WARN:0@1.029] global cap_msmf.cpp:483 `anonymous-namespace'::SourceReaderCB::OnReadSample videoio(MSMF): async ReadSample() call is failed with error status: -1072875772
+[ WARN:1@1.033] global cap_msmf.cpp:1759 CvCapture_MSMF::grabFrame videoio(MSMF): can't grab frame. Error: -1072875772
+```
+
+This happens when another application is already using the capture device.

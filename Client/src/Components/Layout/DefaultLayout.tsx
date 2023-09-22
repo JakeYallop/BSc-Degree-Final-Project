@@ -1,9 +1,10 @@
-import { useTheme, Box, Drawer, IconButton, Paper } from "@mui/material";
+import { useTheme, Box, Drawer, IconButton, Paper, Button } from "@mui/material";
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import RouterLink from "../Routing/RouterLink.tsx";
 import SidebarSlim from "./SidebarSlim.tsx";
 import { Menu } from "@mui/icons-material";
+import { registerForPushNotifications } from "../../main.tsx";
 
 const DefaultLayout = () => {
 	const theme = useTheme();
@@ -34,6 +35,11 @@ const DefaultLayout = () => {
 						<RouterLink path="/clips" fullWidth>
 							Clips
 						</RouterLink>
+					</Box>
+					<Box width="100%" padding={theme.spacing(1)}>
+						<Button variant="outlined" sx={{ padding: 1 }} onClick={registerForPushNotifications} fullWidth>
+							Enable Push
+						</Button>
 					</Box>
 				</Box>
 			</Drawer>

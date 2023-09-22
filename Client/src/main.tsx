@@ -20,33 +20,35 @@ let sw: { registration: ServiceWorkerRegistration | null } = {
 	registration: null,
 };
 
-Notification.requestPermission()
-	.then((permission) => {
-		console.log("Permissions: ", permission);
-		if (permission === "granted") {
-			return navigator.serviceWorker.register(serviceWorkerFile, {
-				type: "module",
-				scope: "/",
-			});
-		} else {
-			console.log("Notifications permission not granted");
-			return Promise.reject();
-		}
-	})
-	.then((registration) => {
-		sw.registration = registration;
+export const registerForPushNotifications = () => {
+	Notification.requestPermission()
+		.then((permission) => {
+			console.log("Permissions: ", permission);
+			if (permission === "granted") {
+				return navigator.serviceWorker.register(serviceWorkerFile, {
+					type: "module",
+					scope: "/",
+				});
+			} else {
+				console.log("Notifications permission not granted");
+				return Promise.reject();
+			}
+		})
+		.then((registration) => {
+			sw.registration = registration;
 
-		return sw.registration.pushManager.subscribe({
-			userVisibleOnly: true,
-			applicationServerKey: base64UrlToBytes(import.meta.env.VITE_VAPID_PUBLIC_KEY),
+			return sw.registration.pushManager.subscribe({
+				userVisibleOnly: true,
+				applicationServerKey: base64UrlToBytes(import.meta.env.VITE_VAPID_PUBLIC_KEY),
+			});
+		})
+		.then((subscription) => {
+			return NotificationsApi.subscribe(subscription);
+		})
+		.then(() => {
+			console.log("Subscribed to push notifications");
+		})
+		.catch((err) => {
+			console.error("Service worker registration failed: ", err);
 		});
-	})
-	.then((subscription) => {
-		return NotificationsApi.subscribe(subscription);
-	})
-	.then(() => {
-		console.log("Subscribed to push notifications");
-	})
-	.catch((err) => {
-		console.error("Service worker registration failed: ", err);
-	});
+};

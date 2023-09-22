@@ -14,7 +14,7 @@
 	},
 	"defaultUrls": {
 		"pushNotifications": "http://localhost:3000",
-		"client": "http://localhost:5173",
+		"client": "https://localhost:5173",
 		"api": "https://localhost:7268"
 	},
 	"dependencies": {
